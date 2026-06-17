@@ -1,0 +1,4 @@
+https://gist.githubusercontent.com/blakesanie/dde3a2b7e698f52f389532b4b52bc254/raw/76fe1b5e9efcf0d2afdfd78b0bfaa737ad0a67d3/shakespeare.txt
+https://arxiv.org/abs/1706.03762
+https://docs.pytorch.org/docs/2.12/index.html
+https://www.geeksforgeeks.org/nlp/multi-head-attention-mechanism/
