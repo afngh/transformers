@@ -143,7 +143,7 @@ class Model(nn.Module):
 
     return logits
 
-text = open('/content/drive/MyDrive/shakespeare.txt').read()
+text = open('shakespeare.txt').read()
 
 chars = sorted(list(set(text)))
 vocab_size = len(chars)
