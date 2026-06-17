@@ -76,7 +76,8 @@ class Attention(nn.Module):
     v = v.view(B, S, self.head, self.hdim).transpose(1, 2)
 
     scores = torch.matmul(q,k.transpose(-1,-2) / self.hdim ** 0.5)
-
+    mask = torch.triu(torch.ones(S, S), diagonal=1).bool().to(x.device)
+    scores = scores.masked_fill(mask, float('-inf'))
     attention_weights = torch.softmax(scores, dim=-1)
     attention_weights = self.dropout(attention_weights)
 
