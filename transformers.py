@@ -7,6 +7,8 @@ Original file is located at
     https://colab.research.google.com/github/afngh/transformers/blob/main/transformers.ipynb
 """
 
+# !git clone https://github.com/afngh/transformers
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -15,9 +17,25 @@ import urllib.request
 import math
 from torch.utils.data import TensorDataset, DataLoader
 import torch.optim as optim
+from torch._prims_common import Tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SwiGLUFFN(nn.Module):
+    def __init__(self, d_model: int, d_ffn: int):
+        super().__init__()
+        self.w_gate = nn.Linear(d_model, d_ffn, bias=False)
+        self.w_value = nn.Linear(d_model, d_ffn, bias=False)
+        self.w_down = nn.Linear(d_ffn, d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        gated_flow = F.silu(self.w_gate(x)) * self.w_value(x)
+        return self.w_down(gated_flow)
 
 class Embedding(nn.Module):
   def __init__(self, dims: int=64, vocab_size: int=5000, dropout: float=0.3):
@@ -75,7 +93,8 @@ class Attention(nn.Module):
     k = k.view(B, S, self.head, self.hdim).transpose(1, 2)
     v = v.view(B, S, self.head, self.hdim).transpose(1, 2)
 
-    scores = torch.matmul(q,k.transpose(-1,-2) / self.hdim ** 0.5)
+    # scores = torch.matmul(q,k.transpose(-1,-2) / self.hdim ** 0.5)
+    scores = torch.matmul(q, k.transpose(-1,-2)) / self.hdim ** 0.5
     mask = torch.triu(torch.ones(S, S), diagonal=1).bool().to(x.device)
     scores = scores.masked_fill(mask, float('-inf'))
     attention_weights = torch.softmax(scores, dim=-1)
@@ -90,28 +109,15 @@ class Attention(nn.Module):
 class PostAttention(nn.Module):
   def __init__(self, dims: int=64, dropout: float=0.3):
     super().__init__()
-
-    self.norm1 = nn.LayerNorm(dims)
-    self.norm2 = nn.LayerNorm(dims)
-
-    self.fnn = nn.Sequential(
-        nn.Linear(dims, dims*4),
-        nn.ReLU(),
-        nn.Linear(dims*4, dims)
-    )
-
+    self.norm1 = nn.RMSNorm(dims)
+    self.norm2 = nn.RMSNorm(dims)
+    self.swiglu = SwiGLUFFN(dims, dims * 4)
     self.drop1 = nn.Dropout(dropout)
     self.drop2 = nn.Dropout(dropout)
 
   def forward(self, x, attention):
-    x = x + self.drop1(attention)
-    x = self.norm1(x)
-
-    f = self.fnn(x)
-
-    x = x + self.drop2(f)
-    x = self.norm2(x)
-
+    x = self.norm1(x + self.drop1(attention))
+    x = self.norm2(x + self.drop2(self.swiglu(x)))
     return x
 
 class Transformer(nn.Module):
@@ -139,35 +145,48 @@ class Model(nn.Module):
     att = self.a(pwe)
     post = self.pa(pwe, att)
 
-    last_vector = post[:,-1:,:].squeeze(0)
+    last_vector = post[:,-1:,:]
     logits = self.t(last_vector)
 
     return logits
 
-text = open('shakespeare.txt').read()
+text = open('transformers/data/shakespeare.txt').read(10000).lower().replace('.',' <EOS> <BOS> ')
 
-chars = sorted(list(set(text)))
-vocab_size = len(chars)
+data = text.split()
+spcl = ['<BOS>','<EOS>','<PAD>','<UNK>']
+words = spcl + sorted(list(set(data)))
 
-wti = {ch:i for i,ch in enumerate(chars)}
-itw = {i:ch for i,ch in enumerate(chars)}
+wti = {word:i for i,word in enumerate(words)}
+itw = {i:word for i,word in enumerate(words)}
 
-X = []
-y = []
+UNK_IDX = wti['<UNK>']
+PAD_IDX = wti['<PAD>']
+BOS_IDX = wti['<BOS>']
+EOS_IDX = wti['<EOS>']
 
-token_size = 3
+def encode(text :list):
+  # data = text.lower().split()
+  data = [wti.get(word,UNK_IDX) for word in text]
+  return data
 
-for i in range(len(text)-token_size):
-  chunk = text[i:i+token_size]
-  target = text[i+token_size]
-  # print(chunk)
-  X.append([wti[char] for char in chunk])
-  y.append(wti[target])
+def decoder(data :Tensor):
+  return ' '.join([itw.get(word,'<UNK>') for word in data])
 
+seq_len = 10
+
+X, y = [], []
+
+for i in range(len(data) - seq_len):
+  X_data = encode(data[i:i+seq_len])
+  y_data = encode([data[i+seq_len]])[0]
+  X.append(X_data)
+  y.append(y_data)
+  # break
+# print(y)
 X = torch.tensor(X).to(device)
 y = torch.tensor(y).to(device)
 
-# X.shape
+vocab_size = len(words)
 
 e = Embedding(
     vocab_size=vocab_size,
@@ -204,10 +223,10 @@ model = Model(
 model.to(device)
 
 dataset = TensorDataset(X, y)
-dataloader = DataLoader(dataset,batch_size = 32,shuffle=False)
+dataloader = DataLoader(dataset,batch_size = 32,drop_last=True,shuffle=True)
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.01)
 
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
 
@@ -219,6 +238,7 @@ for epoch in track(range(200),description="Training Vocab:"):
   el = None
   for X_data,y_true in dataloader:
     y_pred = model(X_data)
+    # break
     # print(y_pred.squeeze(1).shape)
     # print(y_true.shape)
     # print(y_pred.shape)
@@ -231,37 +251,48 @@ for epoch in track(range(200),description="Training Vocab:"):
   print(f"Epoch: {epoch} && Loss: {el}")
   scheduler.step()
 
-from typing_extensions import final
 def generate_response(model, text, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75):
-  print(text)
-  model.eval()
-  final_data_words = [c for c in text]
-  current_input_words = []
+    model.eval()
+    final_data_words = [text]
+    current_words = text.split()
 
-  with torch.no_grad():
-    for i in range(max_tokens):
-      data = [wti[char] for char in final_data_words]
-      data = torch.tensor(data).unsqueeze(0).to(device)
-      output = model(data)
-      # output = output.squeeze(0)
-      probabilities = torch.softmax(output / temperature, dim=-1)
+    with torch.no_grad():
+        for i in range(max_tokens):
+            window = current_words[-seq_len:]
+            data = encode(window)
+            data = [min(max(idx, 0), vocab_size - 1) for idx in data]
+            data = torch.tensor(data).unsqueeze(0).to(device)  # [1, seq_len]
 
-      if top_p < 1.0:
-          sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
-          cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-          num_to_keep = (cumulative_probs < top_p).sum(dim=-1) + 1
-          mask = torch.arange(probabilities.shape[-1], device=device).unsqueeze(0) < num_to_keep.unsqueeze(1)
-          filtered_sorted_probs = sorted_probs * mask
-          probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
-          probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+            output = model(data)                               # [1, vocab_size]
+            # Do NOT squeeze here — keep 2D for top_p logic
 
-      word_idx = torch.multinomial(input=probabilities, num_samples=1).item()
-      predicted_word = itw[word_idx]
+            probabilities = torch.softmax(output / temperature, dim=-1)  # [1, vocab_size]
 
-      final_data_words.append(predicted_word)
-      current_input_words.append(predicted_word)
-      # print(predicted_word,end="")
-  return ''.join(final_data_words)
+            if top_p < 1.0:
+                sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                num_to_keep = (cumulative_probs < top_p).sum(dim=-1) + 1  # [1]
+                mask = torch.arange(probabilities.shape[-1], device=device).unsqueeze(0) < num_to_keep.unsqueeze(1)
+                filtered_sorted_probs = sorted_probs * mask
+                probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
+                probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-output = generate_response(model, "From", max_tokens=20, temperature=1, top_k=0, top_p=0.75)
-print(f'{output=}')
+            # squeeze only here, right before multinomial
+            word_idx = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
+            predicted_word = itw[word_idx]
+
+            if predicted_word == '<EOS>':
+                break
+
+            final_data_words.append(predicted_word)
+            current_words.append(predicted_word)
+
+    return ' '.join(final_data_words)
+generate_response(
+      model=model,
+      text="from",
+      max_tokens=1000,
+      temperature=.5,
+      top_k=3,
+      top_p=0.75
+)
