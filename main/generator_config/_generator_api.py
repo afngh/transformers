@@ -12,6 +12,7 @@ class Generator:
         self.itw = itw
         self.seq_len = seq_len
         self.EOS_token = EOS_token
+        self.config = config
 
     def generate_response(self, prompt):
         self.model.eval()
