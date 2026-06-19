@@ -138,9 +138,11 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
 #   print(f"Epoch: {epoch} && Loss: {el}")
   bp.scheduler.step()
 
+torch.save(model.state_dict(),"model/model.pth")
+
 class InferenceConfig:
-    max_tokens = int(1000)
-    temperature = float(0.8)
+    max_tokens = int(200)
+    temperature = float(2.0)
     top_k = int(0)
     top_p = float(0.75)
 
@@ -160,8 +162,4 @@ client = Generator(
     EOS_token='<EOS>'
 )
 
-print(client.generate_response("to be or not to be"))
-
-#save model
-
-torch.save(model.state_dict(),"model.pth")
+print(f"Generated response: {client.generate_response('war')}")
