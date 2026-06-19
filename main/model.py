@@ -18,7 +18,7 @@ from .transformer_orch._transformer import Transformer
 from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
 
-text = open('transformers/data/shakespeare.txt').read(10000).lower().replace('.',' <EOS> <BOS> ')
+text = open('./data/shakespeare.txt').read(1000).lower().replace('.',' <EOS> <BOS> ')
 
 data = text.split()
 spcl = ['<BOS>','<EOS>','<PAD>','<UNK>']
@@ -161,3 +161,7 @@ client = Generator(
 )
 
 print(client.generate_response("to be or not to be"))
+
+#save model
+
+torch.save(model.state_dict(),"model.pth")
