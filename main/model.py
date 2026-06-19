@@ -19,7 +19,8 @@ from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
 from .save_trained._model_save import SaveModel
 
-text = open('./data/shakespeare.txt').read(1000).lower().replace('.',' <EOS> <BOS> ')
+text = open('./data/shakespeare.txt').read(200000).lower().replace('.',' <EOS> <BOS> ')
+print(f"Data length: {len(text)}")
 
 data = text.split()
 spcl = ['<BOS>','<EOS>','<PAD>','<UNK>']
