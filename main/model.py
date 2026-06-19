@@ -19,7 +19,18 @@ from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
 from .save_trained._model_save import SaveModel
 
-text = open('./data/shakespeare.txt').read(200000).lower().replace('.',' <EOS> <BOS> ')
+from .config._model_config import ModelConfig
+from .config._model_config import ModelSaveConfig
+from .config._model_config import InferenceConfig
+from .config._model_config import DataLoaderConfig
+from .config._model_config import BackPropConfig
+from .config._model_config import TrainConfig
+from .config._model_config import ModelOrchestrator
+from .config._model_config import Indexes
+from .config._model_config import Data
+from .config._model_config import Locales
+
+text = open('./data/shakespeare.txt').read(300).lower().replace('.',' <EOS> <BOS> ')
 print(f"Data length: {len(text)}")
 
 data = text.split()
@@ -29,64 +40,11 @@ words = spcl + sorted(list(set(data)))
 wti = {word:i for i,word in enumerate(words)}
 itw = {i:word for i,word in enumerate(words)}
 
-class Indexes:
-  UNK_IDX = wti['<UNK>']
-  PAD_IDX = wti['<PAD>']
-  BOS_IDX = wti['<BOS>']
-  EOS_IDX = wti['<EOS>']
 
-class Data:
-    def __init__(self, wti, itw):
-        self.wti = wti
-        self.itw = itw
-
-
-class Locales:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    seq_len = 10
-    X = list()
-    y = list()
-
-
-class ModelConfig:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    vocab_size = len(words)
-    dim = int(64)
-    head = int(4)
-
-   
-
-transform = EncDec(data=Data(wti, itw), idxs=Indexes)
+transform = EncDec(data=Data(wti=wti, itw=itw), idxs=Indexes(wti=wti))
 locale = Locales()
-config = ModelConfig()
-
-
-class orch:
-    EmbeddingModel = Embedding(
-        vocab_size=config.vocab_size,
-        dims=config.dim,
-    )
-
-    PositionalEmbeddingModel = PositionalEmbedding(
-        vocab_size=config.vocab_size,
-        dims=config.dim,
-    )
-
-    AttentionModel = Attention(
-        dims=config.dim,
-        head=config.head,
-    )
-
-    PostAttentionModel = PostAttention(
-        dims=config.dim,
-    )
-
-    TransformerModel = Transformer(
-        dims=config.dim,
-        vocab_size=config.vocab_size,
-    )
-
-    Device = config.device
+config = ModelConfig(words=words)
+ModelOrchestrator = ModelOrchestrator(config=config)
 
 for i in range(len(data) - locale.seq_len):
   X_data = transform.encode(data[i:i+locale.seq_len])
@@ -97,7 +55,6 @@ for i in range(len(data) - locale.seq_len):
 X = torch.tensor(locale.X).to(locale.device)
 y = torch.tensor(locale.y).to(locale.device)
 
-ModelOrchestrator = orch()
 
 model = Model(
     EmbeddingModel=ModelOrchestrator.EmbeddingModel,
@@ -108,24 +65,9 @@ model = Model(
     Device=ModelOrchestrator.Device
 )
 
-class DataLoaderConfig:
-    batch_size = int(64)
-    shuffle = bool(True)
-    dataset = TensorDataset(X, y)
-    dataloader = DataLoader(dataset,batch_size = 32,drop_last=True,shuffle=True)
-
-class BackPropConfig:
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
-
-class TrainConfig:
-   EPOCHS = int(30)
-   NORM = float(1.0)
-
-dl = DataLoaderConfig()
-bp = BackPropConfig()
-tr = TrainConfig()
+dl = DataLoaderConfig(X=X, y=y)
+bp = BackPropConfig(model=model)
+tr = TrainConfig(EPOCHS=30, NORM=1.0)
 
 for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
   model.train()
@@ -140,21 +82,12 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
 #   print(f"Epoch: {epoch} && Loss: {el}")
   bp.scheduler.step()
 
-class ModelSaveConfig:
-    model = model.state_dict()
-    path = "model/model.pth"
 
-#save model
-save_model = SaveModel(ModelSaveConfig())
-save_model.save()
+ModelSaveData = ModelSaveConfig(model=model, path="test/model.pth")
+SaveModel = SaveModel(ModelSaveConfig=ModelSaveData)
+SaveModel.save()
 
-class InferenceConfig:
-    max_tokens = int(200)
-    temperature = float(2.0)
-    top_k = int(0)
-    top_p = float(0.75)
-
-inference = InferenceConfig()
+inference = InferenceConfig(max_tokens=20, temperature=0.7, top_k=5, top_p=0.9)
 
 client = Generator(
     model=model,
