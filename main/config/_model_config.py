@@ -101,12 +101,13 @@ class ModelSave:
         self.path = path
 
 class ConfigSave:
-    def __init__(self, inference, transform, config, locale):
+    def __init__(self, inference, transform, config, locale, itw):
         self.inference = inference
         self.transform = transform
         self.config = config
         self.locale = locale
         self.EOS_token = '<EOS>'
+        self.itw = itw
 
 class ConfigPath:
     def __init__(self, model_path="bin/model/model.pt", config_path="bin/data/config.pt"):

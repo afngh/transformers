@@ -90,6 +90,7 @@ client = Generator(
     top_k=inference.top_k,
     top_p=inference.top_p,
     transform=transform,
+    itw=itw,
     config=config,
     seq_len=locale.seq_len,
     device=locale.device,
@@ -106,12 +107,13 @@ ConfigSaveData = ConfigSave(
     inference=inference,
     transform=transform,
     config=config,
-    locale=locale
+    locale=locale,
+    itw=itw
 )
 
 ConfigPathData = ConfigPath(
     model_path="bin/model/model.pt",
-    config_path="bin/data/config.pt",
+    config_path="bin/data/config.pkl",
 )
 
 SaveModel = SaveModel(ModelSaveData=ModelSaveData, ConfigSaveData=ConfigSaveData, ConfigPathData=ConfigPathData)
