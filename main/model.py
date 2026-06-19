@@ -17,6 +17,7 @@ from .transformer_orch._attention import Attention
 from .transformer_orch._transformer import Transformer
 from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
+from .save_trained._model_save import SaveModel
 
 text = open('./data/shakespeare.txt').read(1000).lower().replace('.',' <EOS> <BOS> ')
 
@@ -138,7 +139,13 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
 #   print(f"Epoch: {epoch} && Loss: {el}")
   bp.scheduler.step()
 
-torch.save(model.state_dict(),"model/model.pth")
+class ModelSaveConfig:
+    model = model.state_dict()
+    path = "model/model.pth"
+
+#save model
+save_model = SaveModel(ModelSaveConfig())
+save_model.save()
 
 class InferenceConfig:
     max_tokens = int(200)
