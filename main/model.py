@@ -15,7 +15,9 @@ from .generator_config._generator_api import Generator
 from .save_trained._model_save import SaveModel
 
 from .config._model_config import ModelConfig
-from .config._model_config import ModelSaveConfig
+from .config._model_config import ModelSave
+from .config._model_config import ConfigSave
+from .config._model_config import ConfigPath
 from .config._model_config import InferenceConfig
 from .config._model_config import DataLoaderConfig
 from .config._model_config import BackPropConfig
@@ -25,7 +27,7 @@ from .config._model_config import Indexes
 from .config._model_config import Data
 from .config._model_config import Locales
 
-text = open('./data/shakespeare.txt').read(300).lower().replace('.',' <EOS> <BOS> ')
+text = open('./data/shakespeare.txt').read(1000).lower().replace('.',' <EOS> <BOS> ')
 print(f"Data length: {len(text)}")
 
 data = text.split()
@@ -35,8 +37,8 @@ words = spcl + sorted(list(set(data)))
 wti = {word:i for i,word in enumerate(words)}
 itw = {i:word for i,word in enumerate(words)}
 
-
-transform = EncDec(data=Data(wti=wti, itw=itw), idxs=Indexes(wti=wti))
+iwdata = Data(wti=wti, itw=itw)
+transform = EncDec(data=iwdata, idxs=Indexes(wti=wti))
 locale = Locales()
 config = ModelConfig(words=words)
 ModelOrchestrator = ModelOrchestrator(config=config)
@@ -78,9 +80,6 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
   bp.scheduler.step()
 
 
-ModelSaveData = ModelSaveConfig(model=model, path="test/model.pth")
-SaveModel = SaveModel(ModelSaveConfig=ModelSaveData)
-SaveModel.save()
 
 inference = InferenceConfig(max_tokens=20, temperature=0.7, top_k=5, top_p=0.9)
 
@@ -92,10 +91,28 @@ client = Generator(
     top_p=inference.top_p,
     transform=transform,
     config=config,
-    itw=itw,
     seq_len=locale.seq_len,
     device=locale.device,
     EOS_token='<EOS>'
 )
 
-print(f"Generated response: {client.generate_response('war')}")
+print(f"Test generated response: {client.generate_response('warsaw is a city in poland and')}")
+
+ModelSaveData = ModelSave(
+    model=model,
+)
+
+ConfigSaveData = ConfigSave(
+    inference=inference,
+    transform=transform,
+    config=config,
+    locale=locale
+)
+
+ConfigPathData = ConfigPath(
+    model_path="bin/model/model.pt",
+    config_path="bin/data/config.pt",
+)
+
+SaveModel = SaveModel(ModelSaveData=ModelSaveData, ConfigSaveData=ConfigSaveData, ConfigPathData=ConfigPathData)
+SaveModel.save()

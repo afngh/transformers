@@ -87,10 +87,6 @@ class ModelOrchestrator:
 
         self.Device = config.device
 
-class ModelSaveConfig:
-    def __init__(self, model, path="model/model.pth"):
-        self.model = model.state_dict()
-        self.path = path
 
 class InferenceConfig:
     def __init__(self, max_tokens=20, temperature=0.7, top_k=5, top_p=0.9):
@@ -98,3 +94,21 @@ class InferenceConfig:
         self.temperature = float(temperature)
         self.top_k = int(top_k)
         self.top_p = float(top_p)
+
+class ModelSave:
+    def __init__(self, model, path="model/model.pth"):
+        self.model = model.state_dict()
+        self.path = path
+
+class ConfigSave:
+    def __init__(self, inference, transform, config, locale):
+        self.inference = inference
+        self.transform = transform
+        self.config = config
+        self.locale = locale
+        self.EOS_token = '<EOS>'
+
+class ConfigPath:
+    def __init__(self, model_path="bin/model/model.pt", config_path="bin/data/config.pt"):
+        self.model_path = model_path
+        self.config_path = config_path

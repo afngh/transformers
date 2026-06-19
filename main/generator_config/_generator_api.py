@@ -1,7 +1,7 @@
 import torch
 
 class Generator:
-    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None, config=None, itw=None, seq_len=None, device=None, EOS_token='<EOS>'):
+    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None, config=None, seq_len=None, device=None, EOS_token='<EOS>'):
         self.model = model
         self.transform = transform
         self.device = device
@@ -9,7 +9,7 @@ class Generator:
         self.temperature = temperature
         self.top_k = top_k
         self.top_p = top_p
-        self.itw = itw
+        self.itw = transform.itw
         self.seq_len = seq_len
         self.EOS_token = EOS_token
         self.config = config
