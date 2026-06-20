@@ -1,7 +1,7 @@
 import torch
 
 class Generator:
-    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None,itw=None, config=None, seq_len=None, device=None, EOS_token='<EOS>'):
+    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None, config=None, seq_len=None, device=None):
         self.model = model
         self.transform = transform
         self.device = device
@@ -9,22 +9,17 @@ class Generator:
         self.temperature = temperature
         self.top_k = top_k
         self.top_p = top_p
-        self.itw = itw
         self.seq_len = seq_len
-        self.EOS_token = EOS_token
         self.config = config
 
     def generate_response(self, prompt):
         self.model.eval()
-        final_data_words = [prompt]
-        current_words = prompt.split()
+        ids = self.transform.encode(prompt)
 
         with torch.no_grad():
             for i in range(self.max_tokens):
-                window = current_words[-self.seq_len:]
-                data = self.transform.encode(window)
-                data = [min(max(idx, 0), self.config.vocab_size - 1) for idx in data]
-                data = torch.tensor(data).unsqueeze(0).to(self.device)
+                window = ids[-self.seq_len:]
+                data = torch.tensor(window).unsqueeze(0).to(self.device)
 
                 output = self.model(data)[:, -1, :]
 
@@ -39,13 +34,11 @@ class Generator:
                     probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
                     probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-                word_idx = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
-                predicted_word = self.itw[word_idx]
+                next_id = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
 
-                if predicted_word == self.EOS_token:
+                if next_id == self.transform.EOS_IDX:
                     break
 
-                final_data_words.append(predicted_word)
-                current_words.append(predicted_word)
+                ids.append(next_id)
 
-        return ' '.join(final_data_words)
+        return self.transform.decode(ids)

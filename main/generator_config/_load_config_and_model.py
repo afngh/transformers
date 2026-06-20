@@ -52,8 +52,7 @@ class PretrainedHandler:
         imodel = Model(
             EmbeddingModel=iModelOrchestrator.EmbeddingModel,
             PositionalEmbeddingModel=iModelOrchestrator.PositionalEmbeddingModel,
-            Attention=iModelOrchestrator.AttentionModel,
-            PostAttention=iModelOrchestrator.PostAttentionModel,
+            TransformerBlockLayers=iModelOrchestrator.TransformerBlockLayers,
             Transformer=iModelOrchestrator.TransformerModel,
             Device=iModelOrchestrator.Device
         )
@@ -69,12 +68,9 @@ class PretrainedHandler:
         iconfig=config.config,
         iseq_len=config.locale.seq_len,
         idevice=config.locale.device,
-        iEOS_token=config.EOS_token
-        itw=config.itw
-
         # print(config.transform)
 
-        return imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice, iEOS_token, itw
+        return imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice
 
     def client(self, model, config):
         if model is None or config is None:
@@ -84,7 +80,7 @@ class PretrainedHandler:
         model_origin  = self.get_model(model, config)
         config_origin = self.get_config(config)
 
-        imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice, iEOS_token, itw = config_origin
+        imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice = config_origin
         # print(imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice, iEOS_token)
         generator = Generator(
             model=model_origin,
@@ -96,8 +92,6 @@ class PretrainedHandler:
             config=iconfig[0],
             seq_len=iseq_len[0],
             device=idevice[0],
-            EOS_token=iEOS_token,
-            itw=itw
         )
 
         return generator

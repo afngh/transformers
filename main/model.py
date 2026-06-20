@@ -10,6 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from rich.progress import track
 
 from .seq2seq._enc_dec import EncDec
+from .seq2seq._byte_codec import ByteCodec
 from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
 from .save_trained._model_save import SaveModel
@@ -27,31 +28,30 @@ from .config._model_config import Indexes
 from .config._model_config import Data
 from .config._model_config import Locales
 
-text = open('./data/shakespeare.txt').read(1000).lower().replace('.',' <EOS> <BOS> ')
+text = open('./data/shakespeare.txt').read(1000)
 print(f"Data length: {len(text)}")
 
-data = text.split()
-spcl = ['<BOS>','<EOS>','<PAD>','<UNK>']
-words = spcl + sorted(list(set(data)))
+transform = ByteCodec()
+ids = []
 
-wti = {word:i for i,word in enumerate(words)}
-itw = {i:word for i,word in enumerate(words)}
+for sentence in text.split('.'):
+    sentence = sentence.strip()
+    if not sentence:
+        continue
+    ids.append(transform.BOS_IDX)
+    ids.extend(transform.encode(sentence))
+    ids.append(transform.EOS_IDX)
 
-iwdata = Data(wti=wti, itw=itw)
-transform = EncDec(data=iwdata, idxs=Indexes(wti=wti))
 locale = Locales()
-config = ModelConfig(words=words)
+config = ModelConfig(vocab_size=transform.vocab_size)
 ModelOrchestrator = ModelOrchestrator(config=config)
 
-for i in range(len(data) - locale.seq_len):
-  X_data = transform.encode(data[i:i+locale.seq_len])
-  y_data = transform.encode(data[i+1 : i+locale.seq_len+1])
-  locale.X.append(X_data)
-  locale.y.append(y_data)
+for i in range(len(ids) - locale.seq_len):
+    locale.X.append(ids[i : i + locale.seq_len])
+    locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 
 X = torch.tensor(locale.X).to(locale.device)
 y = torch.tensor(locale.y).to(locale.device)
-
 
 model = Model(
     EmbeddingModel=ModelOrchestrator.EmbeddingModel,
@@ -80,7 +80,7 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
 
 
 
-inference = InferenceConfig(max_tokens=20, temperature=0.7, top_k=5, top_p=0.9)
+inference = InferenceConfig(max_tokens=20, temperature=1.5, top_k=5, top_p=0.9)
 
 client = Generator(
     model=model,
@@ -89,14 +89,12 @@ client = Generator(
     top_k=inference.top_k,
     top_p=inference.top_p,
     transform=transform,
-    itw=itw,
     config=config,
     seq_len=locale.seq_len,
     device=locale.device,
-    EOS_token='<EOS>'
 )
 
-print(f"Test generated response: {client.generate_response('war')}")
+print(f"Test generated response: [ {client.generate_response('war of')} ]")
 
 ModelSaveData = ModelSave(
     model=model,
@@ -107,7 +105,6 @@ ConfigSaveData = ConfigSave(
     transform=transform,
     config=config,
     locale=locale,
-    itw=itw
 )
 
 ConfigPathData = ConfigPath(

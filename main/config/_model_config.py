@@ -50,13 +50,13 @@ class BackPropConfig:
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.9)
 
 class ModelConfig:
-    def __init__(self, words):
+    def __init__(self, vocab_size):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.vocab_size = len(words)
-        self.dim = int(348)
-        self.head = int(6)
+        self.vocab_size = int(vocab_size)
+        self.dim = int(64)
+        self.head = int(4)
         self.dropout = float(0.2)
-        self.ntbl = int(6)
+        self.ntbl = int(2)
 
 class TrainConfig:
     def __init__(self, EPOCHS=30, NORM=1.0):
@@ -102,13 +102,12 @@ class ModelSave:
         self.path = path
 
 class ConfigSave:
-    def __init__(self, inference, transform, config, locale, itw):
+    def __init__(self, inference, transform, config, locale):
         self.inference = inference
         self.transform = transform
         self.config = config
         self.locale = locale
         self.EOS_token = '<EOS>'
-        self.itw = itw
 
 class ConfigPath:
     def __init__(self, model_path="bin/model/model.pt", config_path="bin/data/config.pt"):
