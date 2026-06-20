@@ -10,6 +10,7 @@ from main.transformer_orch._positional_embedding import PositionalEmbedding
 from main.transformer_orch._post_attention import PostAttention
 from main.transformer_orch._attention import Attention
 from main.transformer_orch._transformer import Transformer
+from main.transformer_orch._transformer_block import TransformerBlock
 from main.transformer_orch._model_orc import Model
 
 
@@ -34,12 +35,6 @@ class Locales:
         self.y = list()
 
 
-class ModelConfig:
-    def __init__(self, words):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.vocab_size = len(words)
-        self.dim = int(64)
-        self.head = int(4)
 
 class DataLoaderConfig:
     def __init__(self, X, y, batch_size=64, shuffle=True):
@@ -53,6 +48,15 @@ class BackPropConfig:
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(model.parameters(), lr=0.01)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.9)
+
+class ModelConfig:
+    def __init__(self, words):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.vocab_size = len(words)
+        self.dim = int(348)
+        self.head = int(6)
+        self.dropout = float(0.2)
+        self.ntbl = int(6)
 
 class TrainConfig:
     def __init__(self, EPOCHS=30, NORM=1.0):
@@ -71,14 +75,10 @@ class ModelOrchestrator:
             dims=config.dim,
         )
 
-        self.AttentionModel = Attention(
-            dims=config.dim,
+        self.TransformerBlockLayers = nn.ModuleList([TransformerBlock(
             head=config.head,
-        )
-
-        self.PostAttentionModel = PostAttention(
             dims=config.dim,
-        )
+            dropout=config.dropout) for _ in range(config.ntbl)])
 
         self.TransformerModel = Transformer(
             dims=config.dim,
@@ -86,6 +86,7 @@ class ModelOrchestrator:
         )
 
         self.Device = config.device
+        self.ntbl = config.ntbl
 
 
 class InferenceConfig:

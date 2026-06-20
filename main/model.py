@@ -56,8 +56,7 @@ y = torch.tensor(locale.y).to(locale.device)
 model = Model(
     EmbeddingModel=ModelOrchestrator.EmbeddingModel,
     PositionalEmbeddingModel=ModelOrchestrator.PositionalEmbeddingModel,
-    Attention=ModelOrchestrator.AttentionModel,
-    PostAttention=ModelOrchestrator.PostAttentionModel,
+    TransformerBlockLayers=ModelOrchestrator.TransformerBlockLayers,
     Transformer=ModelOrchestrator.TransformerModel,
     Device=ModelOrchestrator.Device
 )
@@ -97,7 +96,7 @@ client = Generator(
     EOS_token='<EOS>'
 )
 
-print(f"Test generated response: {client.generate_response('warsaw is a city in poland and')}")
+print(f"Test generated response: {client.generate_response('war')}")
 
 ModelSaveData = ModelSave(
     model=model,
@@ -118,3 +117,6 @@ ConfigPathData = ConfigPath(
 
 SaveModel = SaveModel(ModelSaveData=ModelSaveData, ConfigSaveData=ConfigSaveData, ConfigPathData=ConfigPathData)
 SaveModel.save()
+
+trainable_params = sum(p.numel() for p in model.parameters())
+print(f"Trainable parameters: {trainable_params:,}")
