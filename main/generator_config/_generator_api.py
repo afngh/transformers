@@ -26,7 +26,7 @@ class Generator:
                 data = [min(max(idx, 0), self.config.vocab_size - 1) for idx in data]
                 data = torch.tensor(data).unsqueeze(0).to(self.device)
 
-                output = self.model(data)
+                output = self.model(data)[:, -1, :]
 
                 probabilities = torch.softmax(output / self.temperature, dim=-1)
 

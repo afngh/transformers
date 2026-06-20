@@ -17,7 +17,7 @@ class Model(nn.Module):
     att = self.a(pwe)
     post = self.pa(pwe, att)
 
-    last_vector = post[:,-1:,:]
-    logits = self.t(last_vector)
+    # last_vector = post[:,-1:,:]
+    logits = self.t(post)
 
     return logits

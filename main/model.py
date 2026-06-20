@@ -45,7 +45,7 @@ ModelOrchestrator = ModelOrchestrator(config=config)
 
 for i in range(len(data) - locale.seq_len):
   X_data = transform.encode(data[i:i+locale.seq_len])
-  y_data = transform.encode([data[i+locale.seq_len]])[0]
+  y_data = transform.encode(data[i+1 : i+locale.seq_len+1])
   locale.X.append(X_data)
   locale.y.append(y_data)
 
@@ -71,7 +71,7 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
 #   el = None
   for X_data,y_true in dl.dataloader:
     y_pred = model(X_data)
-    loss = bp.loss_fn(y_pred.squeeze(1),y_true)
+    loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
     bp.optimizer.zero_grad()
     # el = loss.item()
     loss.backward()
