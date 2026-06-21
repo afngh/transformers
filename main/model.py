@@ -11,6 +11,7 @@ from rich.progress import track
 
 from .seq2seq._enc_dec import EncDec
 from .seq2seq._byte_codec import ByteCodec
+from .seq2seq._gpt2_tokenizer import TokenCodec
 from .transformer_orch._model_orc import Model
 from .generator_config._generator_api import Generator
 from .save_trained._model_save import SaveModel
@@ -31,16 +32,11 @@ from .config._model_config import Locales
 text = open('./data/shakespeare.txt').read(1000)
 print(f"Data length: {len(text)}")
 
-transform = ByteCodec()
-ids = []
+transform = TokenCodec()
+ids = list()
 
-for sentence in text.split('.'):
-    sentence = sentence.strip()
-    if not sentence:
-        continue
-    ids.append(transform.BOS_IDX)
-    ids.extend(transform.encode(sentence))
-    ids.append(transform.EOS_IDX)
+ids.extend(transform.encode(text))
+ids.append(transform.EOS_IDX)
 
 locale = Locales()
 config = ModelConfig(vocab_size=transform.vocab_size)

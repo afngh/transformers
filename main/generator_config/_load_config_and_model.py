@@ -72,7 +72,7 @@ class PretrainedHandler:
 
         return imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice
 
-    def client(self, model, config):
+    def client(self, model, config, require_params=False, temperature=None, top_k=None, top_p=None, max_tokens=None):
         if model is None or config is None:
             print("Model or config is not loaded properly.")
             return None
@@ -81,7 +81,13 @@ class PretrainedHandler:
         config_origin = self.get_config(config)
 
         imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice = config_origin
-        # print(imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice, iEOS_token)
+
+        if require_params:
+            itemperature = tuple([temperature]) if temperature is not None else itemperature
+            itop_k = tuple([top_k]) if top_k is not None else itop_k
+            itop_p = tuple([top_p]) if top_p is not None else itop_p
+            imax_tokens = tuple([max_tokens]) if max_tokens is not None else imax_tokens
+
         generator = Generator(
             model=model_origin,
             max_tokens=imax_tokens[0],

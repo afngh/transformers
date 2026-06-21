@@ -37,7 +37,7 @@ class Locales:
 
 
 class DataLoaderConfig:
-    def __init__(self, X, y, batch_size=64, shuffle=True):
+    def __init__(self, X, y, batch_size=64, shuffle=False):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.dataset = TensorDataset(X, y)
