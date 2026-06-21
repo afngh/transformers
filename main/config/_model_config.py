@@ -46,7 +46,7 @@ class DataLoaderConfig:
 class BackPropConfig:
     def __init__(self, model):
         self.loss_fn = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(model.parameters(), lr=0.01)
+        self.optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1, betas=(0.9, 0.95))
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.9)
 
 class ModelConfig:

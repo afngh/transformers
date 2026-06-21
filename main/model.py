@@ -70,6 +70,7 @@ for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
     bp.optimizer.zero_grad()
     # el = loss.item()
     loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
     bp.optimizer.step()
 #   print(f"Epoch: {epoch} && Loss: {el}")
   bp.scheduler.step()
