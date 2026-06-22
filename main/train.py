@@ -1,7 +1,7 @@
 from .fine_tune._fine_tune_model import FineTuneModel
 
 PATH = 'bin/model/model.pt'
-FILE_PATH = str(input('enter file_path: '))
+FILE_PATH = 'data/wiki103.txt'
 
 model_loader = FineTuneModel(checkpoint_path=PATH)
 
