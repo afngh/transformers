@@ -1,57 +1,39 @@
-# 🤖 Transformers From Scratch
-### Because using Hugging Face was too easy and we don't do easy things here.
+# Transformers From Scratch
 
----
+> Because using Hugging Face was too easy and we don't do easy things here.
 
-## What Is This?
-
-A **decoder-only Transformer language model built entirely from scratch** in PyTorch, trained on Shakespeare's text. No pretrained weights. No `from transformers import BertForEverything`. Just raw math, a proper project structure, and an increasingly sophisticated understanding of what "from scratch" actually means.
-
-This isn't the notebook anymore. This is the **refactored, modular, production-structured version** — every component lives in its own file, every config has its own class, and the whole thing imports like a real Python package.
-
----
-
-## What Changed (The Glow-Up)
-
-| Before | After |
-|---|---|
-| Single notebook, everything in one cell | Proper package structure under `main/` |
-| Character-level tokenization | Word-level tokenization with special tokens |
-| ReLU + LayerNorm | **SwiGLU + RMSNorm** (yes, like LLaMA) |
-| Broken attention scaling, no mask | Fixed scaling + causal mask ✓ |
-| Raw `generate_response()` function | `Generator` class with EOS stopping |
-| Magic numbers scattered everywhere | Config classes for everything |
-| `shakespeare.txt` in root | Clean `data/` directory with `requirements.txt` |
+A **decoder-only Transformer language model built entirely from scratch** in PyTorch — no pretrained weights, no `from transformers import BertForEverything`. Just raw math, a clean modular codebase, and an incremental daily pretraining workflow designed to accumulate knowledge across datasets over time.
 
 ---
 
 ## Architecture
 
-Because reading "Attention Is All You Need" once wasn't enough — we went ahead and *implemented* it. Then we upgraded it.
+| Component | Implementation |
+|---|---|
+| Tokenizer | GPT-2 BPE via `tiktoken` — fixed vocab of 50,257, never rebuilt |
+| Embedding | `nn.Embedding(vocab_size, dim)` with weight tying to output projection |
+| Positional Encoding | Sinusoidal, sized to `max_seq_len=128` |
+| Attention | Causal multi-head self-attention with scaled dot-product + upper-triangular mask |
+| Normalization | `RMSNorm` (pre-norm — applied before each sublayer, not after) |
+| FFN | SwiGLU — `w_down(silu(w_gate(x)) * w_value(x))`, no bias |
+| Depth | 6 stacked `TransformerBlock` layers via `nn.ModuleList` |
+| Output | `nn.Linear(dim, vocab_size)` — weight-tied to embedding table |
+| Optimizer | AdamW — `lr=1e-3`, `weight_decay=0.1`, `betas=(0.9, 0.95)` |
+| Grad clipping | `clip_grad_norm_` at `1.0` |
+| Scheduler | `StepLR(step_size=5, gamma=0.9)` |
 
-| Component | What It Does | What It Actually Does |
-|---|---|---|
-| `Embedding` | Maps tokens to dense vectors | Turns words into vibes |
-| `PositionalEmbedding` | Injects position via sinusoids | Tells the model where in the sentence it is, because apparently it can't count |
-| `Attention` | Causal multi-head self-attention | Every token gossips about every *past* token. Future tokens are none of its business. |
-| `SwiGLUFFN` | Gated feed-forward network | The activation function LLaMA uses. We also use it now. No big deal. |
-| `PostAttention` | RMSNorm + SwiGLU FFN | Cleans up the mess attention made, with modern normalization |
-| `Transformer` | Output projection | The bouncer who decides what word comes next |
-| `Model` | Orchestrates everything | The guy who says "trust me, it all works together" |
+**Config:** `dim=256`, `head=4`, `ntbl=6`, `dropout=0.2`, `seq_len=128`, `vocab_size=50257` — ~17M parameters
 
 ---
 
-## How It Works
+## How Pre-norm Works
 
 ```
-Input Words → Embedding → Positional Encoding → Causal Multi-Head Attention
-→ RMSNorm → SwiGLU FFN → RMSNorm → Output Logits → Next Word
+x → RMSNorm → Attention → + residual → x
+x → RMSNorm → SwiGLU FFN → + residual → x
 ```
 
-Or in plain English:
-
-> "Give me Shakespeare. I will stare at 10 words at a time, very hard, with a causal mask so I don't cheat.
-> Then I will guess what word comes next. Repeat. Profit."
+Modern transformers (GPT-2 onward) normalize *before* each sublayer, not after. Produces more stable gradients as depth increases — especially important when stacking 6 blocks.
 
 ---
 
@@ -60,109 +42,59 @@ Or in plain English:
 ```
 transformers/
 ├── main/
-│   ├── model.py                        # The entry point — training loop, configs, inference
-│   ├── transformer_orch/               # Every transformer component, one file each
-│   │   ├── _attention.py               # Causal multi-head self-attention
-│   │   ├── _embedding.py               # Token embeddings
-│   │   ├── _positional_embedding.py    # Sinusoidal positional encoding
-│   │   ├── _post_attention.py          # RMSNorm + SwiGLU FFN (the modern stack)
-│   │   ├── _swiglu_activation.py       # SwiGLU: w_gate ⊙ silu(w_value) → w_down
-│   │   ├── _transformer.py             # Output projection head
-│   │   └── _model_orc.py              # Model orchestrator — wires everything together
+│   ├── train.py                         # Daily training entry point
+│   ├── load.py                          # Inference entry point
+│   ├── transformer_orch/
+│   │   ├── _attention.py                # Causal multi-head self-attention
+│   │   ├── _embedding.py                # Token embedding table
+│   │   ├── _positional_embedding.py     # Sinusoidal positional encoding
+│   │   ├── _post_attention.py           # Pre-norm block (RMSNorm + Attention + SwiGLU)
+│   │   ├── _swiglu_activation.py        # SwiGLU FFN
+│   │   ├── _transformer.py              # Output projection head
+│   │   ├── _transformer_block.py        # Single transformer block wrapper
+│   │   └── _model_orc.py               # Model orchestrator + weight tying
 │   ├── seq2seq/
-│   │   └── _enc_dec.py                 # EncDec: encode words → indices, decode back
+│   │   └── _gpt2_tokenizer.py           # TokenCodec wraps tiktoken GPT-2 encoding
+│   ├── config/
+│   │   └── _model_config.py             # All config classes
+│   ├── fine_tune/
+│   │   └── _fine_tune_model.py          # FineTuneModel — load, train, save, HF sync
 │   └── generator_config/
-│       └── _generator_api.py           # Generator class with top-p sampling + EOS stop
+│       ├── _generator_api.py            # Generator — top-p sampling + EOS stopping
+│       └── _load_config_and_model.py    # PretrainedHandler — load for inference
 │
 ├── data/
-│   ├── shakespeare.txt                 # The corpus. 37 plays. 1 training set.
-│   ├── requirements.txt               # torch, matplotlib, rich
-│   └── resources.txt                  # Papers and docs referenced
+│   ├── shakespeare.txt                  # Default training corpus
+│   └── requirements.txt
 │
-└── transformers.py                     # The original flat script, still lives here
+├── setup/
+│   └── setup.sh                         # One-time environment setup
+│
+└── bin/
+    ├── model/                           # Local checkpoint cache (gitignored)
+    └── data/                            # config.pkl
 ```
 
 ---
 
-## The Modern Upgrades
+## Daily Pretraining Workflow
 
-### SwiGLU Activation (used in LLaMA, PaLM, Gemini)
-Replaced the plain ReLU FFN with SwiGLU — the same activation function used in frontier models:
+The core idea: train on one text file per day, save a checkpoint, continue from it the next day on a new file. The GPT-2 tokenizer's fixed vocabulary means checkpoints are always compatible regardless of which dataset you switch to.
 
-```python
-class SwiGLUFFN(nn.Module):
-    def forward(self, x):
-        gated_flow = F.silu(self.w_gate(x)) * self.w_value(x)
-        return self.w_down(gated_flow)
+```
+Day 1 — no checkpoint exists:
+  python -m main.train   →  initializes fresh model, trains, saves to HF
+
+Day N — checkpoint exists on HF:
+  python -m main.train   →  downloads from HF, continues training, pushes updated checkpoint
 ```
 
-Two linear projections, a gating mechanism, and a SiLU activation. No bias. Clean.
-
-### RMSNorm (also used in LLaMA)
-Swapped `LayerNorm` → `RMSNorm`. Faster, simpler, and what modern LLMs actually use.
-
-### Proper Causal Masking
-The model can no longer cheat by looking at future tokens:
-
+To change today's dataset, edit one line in `main/train.py`:
 ```python
-mask = torch.triu(torch.ones(S, S), diagonal=1).bool().to(x.device)
-scores = scores.masked_fill(mask, float('-inf'))
+FILE_PATH = 'data/your_new_file.txt'
 ```
 
-### Word-Level Tokenization with Special Tokens
-Moved from character-level to word-level, with `<BOS>`, `<EOS>`, `<PAD>`, `<UNK>`:
-
-```python
-spcl = ['<BOS>', '<EOS>', '<PAD>', '<UNK>']
-words = spcl + sorted(list(set(data)))
-```
-
-Generation now stops cleanly at `<EOS>` instead of running for a fixed token count.
-
----
-
-## Config-Driven Training
-
-Everything is a config class. No magic numbers, no hunting through 200 lines of code:
-
-```python
-class ModelConfig:
-    vocab_size = len(words)
-    dim = 64
-    head = 4
-
-class TrainConfig:
-    EPOCHS = 30
-    NORM = 1.0
-
-class InferenceConfig:
-    max_tokens = 1000
-    temperature = 0.8
-    top_k = 0
-    top_p = 0.75
-```
-
----
-
-## Text Generation
-
-```python
-client = Generator(
-    model=model,
-    max_tokens=1000,
-    temperature=0.8,
-    top_p=0.75,
-    EOS_token='<EOS>',
-    ...
-)
-
-print(client.generate_response("to be or not to be"))
-```
-
-The model supports:
-- **Temperature scaling** — How spicy do you want your predictions? 🌶️
-- **Top-p (nucleus) sampling** — Only tokens that matter make the cut
-- **EOS stopping** — Generation ends when the model says it ends
+Checkpoints are stored on Hugging Face Hub — not GitHub, since model files are 400MB+. Every upload creates a new commit so you can roll back to any previous session by commit hash.
 
 ---
 
@@ -172,10 +104,45 @@ The model supports:
 git clone https://github.com/afngh/transformers.git
 cd transformers
 
-pip install -r data/requirements.txt
+bash setup/setup.sh   # install deps + HF login (once per machine)
 
-python -m main.model
+python -m main.train  # start training
+python -m main.load   # run inference
 ```
+
+---
+
+## Inference
+
+```python
+from main.generator_config._load_config_and_model import PretrainedHandler
+
+handler = PretrainedHandler('bin/model/model.pt', 'bin/data/config.pkl')
+model, config = handler.load()
+client = handler.client(model, config, require_params=True, temperature=0.8, max_tokens=100)
+
+print(client.generate_response("to be or not to be"))
+```
+
+Generation uses top-p nucleus sampling with temperature scaling. Stops at `<|endoftext|>` (GPT-2 EOS token, id=50256) or `max_tokens`, whichever comes first.
+
+---
+
+## Why GPT-2 Tokenizer
+
+The original implementation used word-level tokenization built from whatever file was currently loaded — meaning every new dataset produced a different vocabulary and a structurally incompatible model. Switching files meant retraining from scratch.
+
+GPT-2's BPE tokenizer has a fixed vocabulary of 50,257 tokens trained once on a large web corpus. Any English text encodes into the same token ID space, making checkpoint continuity across datasets possible by design.
+
+---
+
+## Key Design Decisions
+
+**Weight tying** — the output projection shares its weight matrix with the token embedding table. Saves ~13M parameters at this vocab size and improves small-model quality by learning one consistent token representation space instead of two.
+
+**Pre-norm over post-norm** — normalization before each sublayer produces more stable gradients at depth, especially during the first few hundred training steps of each session when Adam's momentum estimates are cold.
+
+**Full-sequence loss** — targets are input shifted by one position, so every token contributes a loss signal simultaneously. Gives ~128x more gradient signal per batch compared to predicting only the final token.
 
 ---
 
@@ -183,19 +150,16 @@ python -m main.model
 
 ```
 torch
-matplotlib
+tiktoken
 rich
+huggingface_hub
 ```
 
 ---
 
-## Why?
+## License
 
-Because:
-
-1. Everyone imports libraries. **We build libraries.**
-2. Understanding SwiGLU hits different when you've written `F.silu(self.w_gate(x)) * self.w_value(x)` yourself.
-3. Refactoring a notebook into a real project structure, with no AI assistance, at this pace — that's the rep that compounds.
+MIT — see `LICENSE` file.
 
 ---
 
