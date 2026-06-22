@@ -45,7 +45,6 @@ class PretrainedHandler:
             return None, None
 
     def get_model(self, model, config):
-        ilocale = config.locale
         iconfig = config.config
         iModelOrchestrator = ModelOrchestrator(config=iconfig)
 
@@ -56,7 +55,7 @@ class PretrainedHandler:
             Transformer=iModelOrchestrator.TransformerModel,
             Device=iModelOrchestrator.Device
         )
-        imodel.load_state_dict(model)
+        imodel.load_state_dict(model["model"])
         return imodel
     
     def get_config(self, config):

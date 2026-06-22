@@ -7,6 +7,6 @@ handler = PretrainedHandler(model_path, config_path)
 
 model, config = handler.load()
 
-client = handler.client(model, config, require_params=True, temperature=0.1, max_tokens=100)
+client = handler.client(model, config, require_params=True, temperature=2, max_tokens=100)
 
-print(client.generate_response("warsaw is a city in poland and"))
+print(client.generate_response("war"))

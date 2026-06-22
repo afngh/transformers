@@ -53,13 +53,13 @@ class ModelConfig:
     def __init__(self, vocab_size):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.vocab_size = int(vocab_size)
-        self.dim = int(64)
+        self.dim = int(256)
         self.head = int(4)
         self.dropout = float(0.2)
-        self.ntbl = int(2)
+        self.ntbl = int(6)
 
 class TrainConfig:
-    def __init__(self, EPOCHS=30, NORM=1.0):
+    def __init__(self, EPOCHS=3, NORM=1.0):
         self.EPOCHS = int(EPOCHS)
         self.NORM = float(NORM)
 
@@ -97,8 +97,10 @@ class InferenceConfig:
         self.top_p = float(top_p)
 
 class ModelSave:
-    def __init__(self, model, path="model/model.pth"):
+    def __init__(self, model, optimizer, scheduler, path="model/model.pth"):
         self.model = model.state_dict()
+        self.optimizer = optimizer.state_dict()
+        self.scheduler = scheduler.state_dict()
         self.path = path
 
 class ConfigSave:

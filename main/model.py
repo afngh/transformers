@@ -29,7 +29,7 @@ from .config._model_config import Indexes
 from .config._model_config import Data
 from .config._model_config import Locales
 
-text = open('./data/shakespeare.txt').read(1000)
+text = open('./data/wiki_00.txt').read()
 print(f"Data length: {len(text)}")
 
 transform = TokenCodec()
@@ -59,7 +59,7 @@ model = Model(
 
 dl = DataLoaderConfig(X=X, y=y)
 bp = BackPropConfig(model=model)
-tr = TrainConfig(EPOCHS=30, NORM=1.0)
+tr = TrainConfig()
 
 for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
   model.train()
@@ -95,6 +95,8 @@ print(f"Test generated response: [ {client.generate_response('war of')} ]")
 
 ModelSaveData = ModelSave(
     model=model,
+    optimizer=bp.optimizer,
+    scheduler=bp.scheduler
 )
 
 ConfigSaveData = ConfigSave(
