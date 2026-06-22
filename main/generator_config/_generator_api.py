@@ -2,7 +2,7 @@ import torch
 
 class Generator:
     def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None, config=None, seq_len=None, device=None):
-        self.model = model
+        self.model = model.module if hasattr(model, 'module') else model
         self.transform = transform
         self.device = device
         self.max_tokens = max_tokens

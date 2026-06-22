@@ -99,7 +99,7 @@ class InferenceConfig:
 
 class ModelSave:
     def __init__(self, model, optimizer, scheduler, path="model/model.pth"):
-        self.model = model.state_dict()
+        self.model = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
         self.optimizer = optimizer.state_dict()
         self.scheduler = scheduler.state_dict()
         self.path = path

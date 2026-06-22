@@ -131,9 +131,12 @@ class FineTuneModel():
 
     def train(self, file_path):
         model = self._load_pretrained_model(self.model_weights)
+        scaler = torch.amp.GradScaler('cuda') if self.locale.device.type == 'cuda' else None
+
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
 
         for chunk_idx, ids in enumerate(self.encode_file(file_path)):
-            # rebuild X/y for this chunk only
             locale = Locales()
             for i in range(len(ids) - locale.seq_len):
                 locale.X.append(ids[i : i + locale.seq_len])
@@ -152,15 +155,28 @@ class FineTuneModel():
             for epoch in track(range(tr.EPOCHS), description=f"Chunk {chunk_idx+1}:"):
                 model.train()
                 for X_data, y_true in dl.dataloader:
-                    y_pred = model(X_data)
-                    loss = bp.loss_fn(
-                        y_pred.reshape(-1, y_pred.size(-1)),
-                        y_true.reshape(-1)
-                    )
                     bp.optimizer.zero_grad()
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
-                    bp.optimizer.step()
+                    if scaler is not None:
+                        with torch.amp.autocast(device_type='cuda'):
+                            y_pred = model(X_data)
+                            loss = bp.loss_fn(
+                                y_pred.reshape(-1, y_pred.size(-1)),
+                                y_true.reshape(-1)
+                            )
+                        scaler.scale(loss).backward()
+                        scaler.unscale_(bp.optimizer)
+                        nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
+                        scaler.step(bp.optimizer)
+                        scaler.update()
+                    else:
+                        y_pred = model(X_data)
+                        loss = bp.loss_fn(
+                            y_pred.reshape(-1, y_pred.size(-1)),
+                            y_true.reshape(-1)
+                        )
+                        loss.backward()
+                        nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
+                        bp.optimizer.step()
                 bp.scheduler.step()
 
             # free memory before next chunk
@@ -183,7 +199,7 @@ class FineTuneModel():
     def save(self, path=None):
         path = path or self.checkpoint_path
         torch.save({
-            "model": self.origin_model.state_dict(),
+            "model": self.origin_model.module.state_dict() if hasattr(self.origin_model, 'module') else self.origin_model.state_dict(),
             "optimizer": self.origin_optimizer.state_dict(),
             "scheduler": self.origin_scheduler.state_dict(),
         }, path)
