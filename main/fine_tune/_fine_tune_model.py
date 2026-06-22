@@ -62,11 +62,15 @@ class FineTuneModel():
 
         return ids
     
-    def encode_file(self, file_path):
-        text = open(file_path).read()
-
-        ids = self._encode_data(text)
-        return ids
+    def encode_file(self, file_path, chunk_size=500_000):
+        """yields one chunk of text at a time instead of loading whole file"""
+        with open(file_path, 'r') as f:
+            text = f.read(chunk_size)
+            while text:
+                ids = self.transform.encode(text)
+                ids.append(self.transform.EOS_IDX)
+                yield ids
+                text = f.read(chunk_size)
 
     def _get_model_arch(self, transform):
         config = ModelConfig(vocab_size=transform.vocab_size)
@@ -125,31 +129,43 @@ class FineTuneModel():
             bpc.scheduler.load_state_dict(scheduler_weights)
         return bpc
 
-    def train(self, ids):
-        X, y = self._load_datasets(ids)
-
+    def train(self, file_path):
         model = self._load_pretrained_model(self.model_weights)
-        LoadUniConfigs = self._load_uni_configs(X=X, y=y, model=model)
 
-        dl = LoadUniConfigs["DataLoaderConfig"]
-        bp = LoadUniConfigs["BackPropConfig"]
-        tr = LoadUniConfigs["TrainConfig"]
+        for chunk_idx, ids in enumerate(self.encode_file(file_path)):
+            # rebuild X/y for this chunk only
+            locale = Locales()
+            for i in range(len(ids) - locale.seq_len):
+                locale.X.append(ids[i : i + locale.seq_len])
+                locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 
-        for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
-            model.train()
-            el = None
-            for X_data,y_true in dl.dataloader:
-                y_pred = model(X_data)
-                loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
-                bp.optimizer.zero_grad()
-                el = loss.item()
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
-                bp.optimizer.step()
-            bp.scheduler.step()
-            print(f'epoch loss: {el}')
+            X = torch.tensor(locale.X).to(locale.device)
+            y = torch.tensor(locale.y).to(locale.device)
 
-        print("training sucess & saved")
+            LoadUniConfigs = self._load_uni_configs(X=X, y=y, model=model)
+            dl = LoadUniConfigs["DataLoaderConfig"]
+            bp = LoadUniConfigs["BackPropConfig"]
+            tr = LoadUniConfigs["TrainConfig"]
+            
+            print(f"Chunk {chunk_idx+1} — {len(ids):,} tokens")
+
+            for epoch in track(range(tr.EPOCHS), description=f"Chunk {chunk_idx+1}:"):
+                model.train()
+                for X_data, y_true in dl.dataloader:
+                    y_pred = model(X_data)
+                    loss = bp.loss_fn(
+                        y_pred.reshape(-1, y_pred.size(-1)),
+                        y_true.reshape(-1)
+                    )
+                    bp.optimizer.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
+                    bp.optimizer.step()
+                bp.scheduler.step()
+
+            # free memory before next chunk
+            del X, y, locale
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
         self._save_model_optimizer_scheduler_data(
             model=model,
