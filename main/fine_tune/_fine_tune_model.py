@@ -190,9 +190,6 @@ class FineTuneModel():
             # free memory before next chunk
             del X, y, locale
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
-            
-
-
 
     def _save_model_optimizer_scheduler_data(self, model, optimizer, scheduler):
         self.origin_model = model
@@ -212,7 +209,7 @@ class FineTuneModel():
             path_or_fileobj=path,
             path_in_repo="model.pt",
             repo_id=REPO_ID,
-            repo_type="model"
+            repo_type="model",
             commit_message=message
         )
         print("Checkpoint pushed to Hugging Face")
