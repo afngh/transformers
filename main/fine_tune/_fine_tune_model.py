@@ -63,7 +63,7 @@ class FineTuneModel():
         return ids
     
     def encode_file(self, file_path):
-        text = open(file_path).read(1000)
+        text = open(file_path).read()
 
         ids = self._encode_data(text)
         return ids

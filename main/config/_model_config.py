@@ -71,7 +71,8 @@ class ModelOrchestrator:
         )
 
         self.PositionalEmbeddingModel = PositionalEmbedding(
-            vocab_size=config.vocab_size,
+            # vocab_size=config.vocab_size,
+            max_seq_len=128,
             dims=config.dim,
         )
 

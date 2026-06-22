@@ -8,6 +8,7 @@ class Model(nn.Module):
     self.pe = PositionalEmbeddingModel
     self.blayers = TransformerBlockLayers
     self.t = Transformer
+    self.t.output_layer.weight = self.e.embed.weight 
     self.to(Device)
 
   def forward(self, x):

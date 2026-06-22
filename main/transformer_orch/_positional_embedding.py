@@ -3,12 +3,12 @@ import torch.nn as nn
 import math
 
 class PositionalEmbedding(nn.Module):
-  def __init__(self, dims: int=64, vocab_size: int=5000):
+  def __init__(self, dims: int=64, max_seq_len: int=128):
     super().__init__()
 
-    pe = torch.zeros(vocab_size, dims)
+    pe = torch.zeros(max_seq_len, dims)
 
-    position = torch.arange(0, vocab_size, dtype=torch.float).unsqueeze(1)
+    position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
     div_term = torch.exp(torch.arange(0, dims, 2).float() * (-math.log(10000.0) / dims))
 
     pe[:, 0::2] = torch.sin(position * div_term)
