@@ -30,7 +30,7 @@ class Data:
 class Locales:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.seq_len = 10
+        self.seq_len = 128
         self.X = list()
         self.y = list()
 

@@ -25,6 +25,9 @@ from main.config._model_config import ModelOrchestrator
 from main.config._model_config import Indexes
 from main.config._model_config import Data
 from main.config._model_config import Locales
+from huggingface_hub import hf_hub_download
+
+REPO_ID = "afnhf/my-transformer"
 
 class PretrainedHandler:
     def __init__(self, model_path, config_path):
@@ -32,6 +35,16 @@ class PretrainedHandler:
         self.config_path = config_path
     
     def load(self):
+        try:
+            hf_hub_download(
+                repo_id=REPO_ID,
+                filename="model.pt",
+                local_dir="bin/model"
+            )
+            print("Checkpoint synced from Hugging Face")
+        except Exception:
+            print("No remote checkpoint — using local")
+
         try:
             model = torch.load(self.model_path, weights_only=True)
             print(f"Model loaded successfully from {self.model_path}")

@@ -7,20 +7,7 @@ import torch
 class TransformerBlock(nn.Module):
     def __init__(self, dims, head, dropout):
         super().__init__()
-        
-        self.attention = Attention(
-            dims=dims,
-            head=head,
-            dropout=dropout
-        )
-
-        self.post_attention = PostAttention(
-            dims=dims,
-            dropout=dropout
-        )
+        self.block = PostAttention(dims=dims, dropout=dropout, head=head)
 
     def forward(self, x):
-        att = self.attention(x)
-        x = self.post_attention(x, att)
-
-        return x
+        return self.block(x)

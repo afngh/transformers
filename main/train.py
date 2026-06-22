@@ -1,7 +1,7 @@
 from .fine_tune._fine_tune_model import FineTuneModel
 
 PATH = 'bin/model/model.pt'
-FILE_PATH = 'data/shakespeare.txt'
+FILE_PATH = 'data/wiki_00.txt'
 
 model_loader = FineTuneModel(checkpoint_path=PATH)
 

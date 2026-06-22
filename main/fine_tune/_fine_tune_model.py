@@ -21,13 +21,19 @@ class FineTuneModel():
     def __init__(self, checkpoint_path):
         checkpoint = self._load(checkpoint_path=checkpoint_path)
 
-        self.model_weights = checkpoint["model"]
-        self.optimizer_weights = checkpoint["optimizer"]
-        self.scheduler_weights = checkpoint["scheduler"]
+        if checkpoint is None:
+            # first run — no checkpoint exists yet, start fresh
+            print("No checkpoint found — initializing fresh model")
+            self.model_weights = None
+            self.optimizer_weights = None
+            self.scheduler_weights = None
+        else:
+            self.model_weights = checkpoint["model"]
+            self.optimizer_weights = checkpoint["optimizer"]
+            self.scheduler_weights = checkpoint["scheduler"]
 
         self.transform = TokenCodec()
         self.locale = Locales()
-
         self.checkpoint_path = checkpoint_path
 
     def _load(self, checkpoint_path):
@@ -94,24 +100,29 @@ class FineTuneModel():
         return TRAINING_SETTINGS
 
     def _load_pretrained_model(self, model_weights=None):
-        ModelOrchestrator = self._get_model_arch(transform=self.transform)
+        orch = self._get_model_arch(transform=self.transform)
 
         model = Model(
-            EmbeddingModel=ModelOrchestrator.EmbeddingModel,
-            PositionalEmbeddingModel=ModelOrchestrator.PositionalEmbeddingModel,
-            TransformerBlockLayers=ModelOrchestrator.TransformerBlockLayers,
-            Transformer=ModelOrchestrator.TransformerModel,
-            Device=ModelOrchestrator.Device
+            EmbeddingModel=orch.EmbeddingModel,
+            PositionalEmbeddingModel=orch.PositionalEmbeddingModel,
+            TransformerBlockLayers=orch.TransformerBlockLayers,
+            Transformer=orch.TransformerModel,
+            Device=orch.Device
         )
 
-        model.load_state_dict(model_weights)
+        if model_weights is not None:
+            model.load_state_dict(model_weights)
+            print("Weights loaded from checkpoint")
+        else:
+            print("Fresh model — random initialization")
 
         return model
     
     def _load_optimizer_scheduler(self, bpc=None, optimizer_weights=None, scheduler_weights=None):
-        bpc.optimizer.load_state_dict(optimizer_weights)
-        bpc.scheduler.load_state_dict(scheduler_weights)
-
+        if optimizer_weights is not None:
+            bpc.optimizer.load_state_dict(optimizer_weights)
+        if scheduler_weights is not None:
+            bpc.scheduler.load_state_dict(scheduler_weights)
         return bpc
 
     def train(self, ids):
