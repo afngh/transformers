@@ -178,16 +178,19 @@ class FineTuneModel():
                         nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
                         bp.optimizer.step()
                 bp.scheduler.step()
+            
+            if chunk_idx % 20 == 0:
+                self._save_model_optimizer_scheduler_data(
+                    model=model,
+                    optimizer=bp.optimizer,
+                    scheduler=bp.scheduler
+                )
 
+                self.save(message=f"checkpoint {chunk_idx} with file {file_path}")
             # free memory before next chunk
             del X, y, locale
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
-
-        self._save_model_optimizer_scheduler_data(
-            model=model,
-            optimizer=bp.optimizer,
-            scheduler=bp.scheduler
-        )
+            
 
 
 
@@ -196,7 +199,7 @@ class FineTuneModel():
         self.origin_optimizer = optimizer
         self.origin_scheduler = scheduler
 
-    def save(self, path=None):
+    def save(self, path=None, message="training completed"):
         path = path or self.checkpoint_path
         torch.save({
             "model": self.origin_model.module.state_dict() if hasattr(self.origin_model, 'module') else self.origin_model.state_dict(),
@@ -210,5 +213,6 @@ class FineTuneModel():
             path_in_repo="model.pt",
             repo_id=REPO_ID,
             repo_type="model"
+            commit_message=message
         )
         print("Checkpoint pushed to Hugging Face")
