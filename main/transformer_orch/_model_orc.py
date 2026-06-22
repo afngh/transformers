@@ -4,11 +4,11 @@ import torch.nn as nn
 class Model(nn.Module):
   def __init__(self, EmbeddingModel, PositionalEmbeddingModel, TransformerBlockLayers, Transformer, Device):
     super().__init__()
-    self.to(Device)
     self.e = EmbeddingModel
     self.pe = PositionalEmbeddingModel
     self.blayers = TransformerBlockLayers
     self.t = Transformer
+    self.to(Device)
 
   def forward(self, x):
     wv = self.e(x)
