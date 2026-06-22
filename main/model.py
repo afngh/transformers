@@ -42,7 +42,7 @@ locale = Locales()
 config = ModelConfig(vocab_size=transform.vocab_size)
 ModelOrchestrator = ModelOrchestrator(config=config)
 
-for i in range(len(ids) - locale.seq_len):
+for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
     locale.X.append(ids[i : i + locale.seq_len])
     locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 

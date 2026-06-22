@@ -138,7 +138,7 @@ class FineTuneModel():
 
         for chunk_idx, ids in enumerate(self.encode_file(file_path)):
             locale = Locales()
-            for i in range(len(ids) - locale.seq_len):
+            for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
                 locale.X.append(ids[i : i + locale.seq_len])
                 locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 
