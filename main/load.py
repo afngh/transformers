@@ -9,4 +9,4 @@ model, config = handler.load()
 
 client = handler.client(model, config, require_params=True, temperature=2, max_tokens=100)
 
-print(client.generate_response("war"))
+print(client.generate_response(input("enter prompt: ")))

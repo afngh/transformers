@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import pickle
+import json
+
 from rich.progress import track
 
 from main.seq2seq._gpt2_tokenizer import TokenCodec
@@ -10,8 +12,7 @@ from main.config._model_config import ModelOrchestrator
 from main.config._model_config import DataLoaderConfig
 from main.config._model_config import BackPropConfig
 from main.config._model_config import TrainConfig
-from main.config._model_config import *
-
+from main.transformer_orch._model_orc import Model
 
 class FineTuneModel():
     def __init__(self, checkpoint_path):
@@ -140,12 +141,12 @@ class FineTuneModel():
         self.origin_optimizer = optimizer
         self.origin_scheduler = scheduler
 
-    def save(self):
+    def save(self, path=None):
         origin_model_weights = self.origin_model.state_dict()
         origin_optimizer_weights = self.origin_optimizer.state_dict()
         origin_scheduler_weights = self.origin_scheduler.state_dict()
 
-        path = self.checkpoint_path
+        path = path or self.checkpoint_path
 
         torch.save({
             "model":origin_model_weights,

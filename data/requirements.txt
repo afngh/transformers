@@ -1,3 +1,5 @@
 torch
 matplotlib
 rich
+tiktoken
+json
