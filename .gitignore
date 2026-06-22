@@ -1,5 +1,7 @@
 .vscode
 __pycache__bin/model/*.pt
-bin/data/*.pkl
 bin/model/*.pt
-bin/data/*.pkl
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

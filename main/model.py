@@ -29,7 +29,7 @@ from .config._model_config import Indexes
 from .config._model_config import Data
 from .config._model_config import Locales
 
-text = open('./data/wiki_00.txt').read()
+text = open('./data/wiki_00.txt').read(1000)
 print(f"Data length: {len(text)}")
 
 transform = TokenCodec()

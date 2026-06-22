@@ -4,6 +4,7 @@ import pickle
 import json
 
 from rich.progress import track
+from huggingface_hub import hf_hub_download, upload_file
 
 from main.seq2seq._gpt2_tokenizer import TokenCodec
 from main.config._model_config import Locales
@@ -13,6 +14,8 @@ from main.config._model_config import DataLoaderConfig
 from main.config._model_config import BackPropConfig
 from main.config._model_config import TrainConfig
 from main.transformer_orch._model_orc import Model
+
+REPO_ID = "afnhf/my-transformer"
 
 class FineTuneModel():
     def __init__(self, checkpoint_path):
@@ -29,9 +32,18 @@ class FineTuneModel():
 
     def _load(self, checkpoint_path):
         try:
-            checkpoint = torch.load(checkpoint_path, weights_only=True)
-            print(f"Model & Optimizer & Scheduler loaded successfully from {checkpoint_path}")
+            hf_hub_download(
+                repo_id=REPO_ID,
+                filename="model.pt",
+                local_dir="bin/model"
+            )
+            print("Checkpoint synced from Hugging Face")
+        except Exception:
+            print("No remote checkpoint found — using local")
 
+        try:
+            checkpoint = torch.load(checkpoint_path, weights_only=True)
+            print(f"Model & Optimizer & Scheduler loaded from {checkpoint_path}")
             return checkpoint
         except Exception as e:
             print(f"Error loading model: {e}")
@@ -45,7 +57,7 @@ class FineTuneModel():
         return ids
     
     def encode_file(self, file_path):
-        text = open(file_path).read()
+        text = open(file_path).read(1000)
 
         ids = self._encode_data(text)
         return ids
@@ -142,16 +154,18 @@ class FineTuneModel():
         self.origin_scheduler = scheduler
 
     def save(self, path=None):
-        origin_model_weights = self.origin_model.state_dict()
-        origin_optimizer_weights = self.origin_optimizer.state_dict()
-        origin_scheduler_weights = self.origin_scheduler.state_dict()
-
         path = path or self.checkpoint_path
-
         torch.save({
-            "model":origin_model_weights,
-            "optimizer":origin_optimizer_weights,
-            "scheduler":origin_scheduler_weights
-        },path)
+            "model": self.origin_model.state_dict(),
+            "optimizer": self.origin_optimizer.state_dict(),
+            "scheduler": self.origin_scheduler.state_dict(),
+        }, path)
+        print(f"model saved at {path}")
 
-        print("model saved")
+        upload_file(
+            path_or_fileobj=path,
+            path_in_repo="model.pt",
+            repo_id=REPO_ID,
+            repo_type="model"
+        )
+        print("Checkpoint pushed to Hugging Face")
