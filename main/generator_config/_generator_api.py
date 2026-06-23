@@ -14,7 +14,9 @@ class Generator:
 
     def generate_response(self, prompt):
         self.model.eval()
-        ids = self.transform.encode(prompt)
+        prompt_ids = self.transform.encode(prompt)
+        ids = list(prompt_ids)
+        prompt_len = len(prompt_ids)
 
         with torch.no_grad():
             for i in range(self.max_tokens):
@@ -40,5 +42,8 @@ class Generator:
                     break
 
                 ids.append(next_id)
+                if "<|endoftext|>" in self.transform.decode(ids[prompt_len:]):
+                    break
 
-        return self.transform.decode(ids)
+        generated_text = self.transform.decode(ids[prompt_len:]).split("<|endoftext|>")[0]
+        return prompt + generated_text
