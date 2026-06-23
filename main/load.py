@@ -1,12 +1,41 @@
 from main.generator_config._load_config_and_model import PretrainedHandler
+import os
+from dotenv import load_dotenv
 
-model_path = 'bin/model/model.pt'
-config_path = 'bin/data/config.pkl'
+# model_path = 'bin/model/model.pt'
+# config_path = 'bin/data/config.pkl'
 
-handler = PretrainedHandler(model_path, config_path)
+# handler = PretrainedHandler(model_path, config_path)
 
-model, config = handler.load()
+# model, config = handler.load()
 
-client = handler.client(model, config, require_params=True, temperature=2, max_tokens=100)
+# client = handler.client(model, config, require_params=True, temperature=2, max_tokens=100)
 
-print(client.generate_response(input("enter prompt: ")))
+# print(client.generate_response("war"))
+
+class dynamo:
+    def __init__(self):
+        load_dotenv(dotenv_path=".env.example")
+
+        self.model_path = os.getenv("MODEL_PATH")
+        self.config_path = os.getenv("CONFIG_PATH")
+    
+        self.handler = PretrainedHandler(self.model_path, self.config_path)
+
+    def Client(self):
+        self.model, self.config = self.handler.load()
+
+    def create(self, input :str, temperature=None, max_tokens=None):
+        model_api = self.handler.client(self.model, self.config, require_params=True, temperature=temperature, max_tokens=max_tokens)
+
+        output = model_api.generate_response(input)
+
+        return Response(input_text=input, output_text=output)
+
+class Response:
+    def __init__(self, input_text=None, output_text=None):
+        self.input_text = input_text
+        self.output_text = output_text
+
+    def __str__(self):
+        return f"Response(input_text='{self.input_text}', output_text='{self.output_text}')"

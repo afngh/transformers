@@ -2,3 +2,4 @@ torch
 rich
 tiktoken
 huggingface_hub
+dotenv
