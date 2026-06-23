@@ -48,7 +48,8 @@ class FineTuneModel():
             print("No remote checkpoint found — using local")
 
         try:
-            checkpoint = torch.load(checkpoint_path, weights_only=True)
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
             print(f"Model & Optimizer & Scheduler loaded from {checkpoint_path}")
             return checkpoint
         except Exception as e:
@@ -179,7 +180,7 @@ class FineTuneModel():
                         bp.optimizer.step()
                 bp.scheduler.step()
             
-            if chunk_idx % 20 == 0:
+            if chunk_idx % 50 == 0:
                 self._save_model_optimizer_scheduler_data(
                     model=model,
                     optimizer=bp.optimizer,

@@ -46,7 +46,8 @@ class PretrainedHandler:
             print("No remote checkpoint — using local")
 
         try:
-            model = torch.load(self.model_path, weights_only=True)
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            model = torch.load(self.model_path, map_location=device, weights_only=True)
             print(f"Model loaded successfully from {self.model_path}")
 
             with open(self.config_path, 'rb') as f:
