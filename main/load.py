@@ -27,4 +27,4 @@ class Response:
         self.output_text = output_text
 
     def __str__(self):
-        return f"Response(input_text='{self.input_text}', output_text='{self.output_text}')"
+        return f"""Response(input_text='{self.input_text}',\noutput_text='{self.output_text}')"""
