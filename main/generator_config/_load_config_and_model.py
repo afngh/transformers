@@ -26,8 +26,11 @@ from main.config._model_config import Indexes
 from main.config._model_config import Data
 from main.config._model_config import Locales
 from huggingface_hub import hf_hub_download
+import os
+from dotenv import load_dotenv
 
-REPO_ID = "afnhf/my-transformer"
+load_dotenv()
+REPO_ID = os.getenv("HF_REPO_ID", "afnhf/dynamo")
 
 class PretrainedHandler:
     def __init__(self, model_path, config_path):

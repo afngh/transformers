@@ -228,7 +228,7 @@ dataloader = DataLoader(dataset,batch_size = 32,drop_last=True,shuffle=True)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1e-5)
 
 EPOCHS = 30
 NORM = 1.0

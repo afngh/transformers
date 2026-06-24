@@ -14,8 +14,11 @@ from main.config._model_config import DataLoaderConfig
 from main.config._model_config import BackPropConfig
 from main.config._model_config import TrainConfig
 from main.transformer_orch._model_orc import Model
+import os
+from dotenv import load_dotenv
 
-REPO_ID = "afnhf/my-transformer"
+load_dotenv()
+REPO_ID = os.getenv("HF_REPO_ID", "afnhf/dynamo")
 
 class FineTuneModel():
     def __init__(self, checkpoint_path):
@@ -143,10 +146,25 @@ class FineTuneModel():
                 locale.X.append(ids[i : i + locale.seq_len])
                 locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 
+            if len(locale.X) == 0:
+                print(f"Chunk {chunk_idx+1} has no data, skipping.")
+                continue
+
             X = torch.tensor(locale.X).to(locale.device)
             y = torch.tensor(locale.y).to(locale.device)
 
-            LoadUniConfigs = self._load_uni_configs(X=X, y=y, model=model)
+            # Perform a 90/10 split
+            val_size = max(1, int(len(locale.X) * 0.1))
+            train_size = len(locale.X) - val_size
+
+            if train_size > 0:
+                X_train, X_val = X[:train_size], X[train_size:]
+                y_train, y_val = y[:train_size], y[train_size:]
+            else:
+                X_train, X_val = X, X
+                y_train, y_val = y, y
+
+            LoadUniConfigs = self._load_uni_configs(X=X_train, y=y_train, model=model)
             dl = LoadUniConfigs["DataLoaderConfig"]
             bp = LoadUniConfigs["BackPropConfig"]
             tr = LoadUniConfigs["TrainConfig"]
@@ -180,17 +198,50 @@ class FineTuneModel():
                         bp.optimizer.step()
                 bp.scheduler.step()
             
-            if chunk_idx % 50 == 0:
+            # Calculate validation loss
+            model.eval()
+            val_loss = 0.0
+            val_batches = 0
+            val_dl = DataLoaderConfig(X=X_val, y=y_val, batch_size=dl.batch_size, shuffle=False, drop_last=False)
+            with torch.no_grad():
+                for X_val_batch, y_val_batch in val_dl.dataloader:
+                    if scaler is not None:
+                        with torch.amp.autocast(device_type='cuda'):
+                            y_val_pred = model(X_val_batch)
+                            loss = bp.loss_fn(
+                                y_val_pred.reshape(-1, y_val_pred.size(-1)),
+                                y_val_batch.reshape(-1)
+                            )
+                    else:
+                        y_val_pred = model(X_val_batch)
+                        loss = bp.loss_fn(
+                            y_val_pred.reshape(-1, y_val_pred.size(-1)),
+                            y_val_batch.reshape(-1)
+                        )
+                    val_loss += loss.item()
+                    val_batches += 1
+            avg_val_loss = val_loss / val_batches if val_batches > 0 else 0.0
+            self.latest_val_loss = avg_val_loss
+            print(f"Chunk {chunk_idx+1} Validation Loss: {self.latest_val_loss:.4f}")
+
+            if (chunk_idx + 1) % 50 == 0:
                 self._save_model_optimizer_scheduler_data(
                     model=model,
                     optimizer=bp.optimizer,
                     scheduler=bp.scheduler
                 )
 
-                self.save(message=f"checkpoint {chunk_idx} with file {file_path}")
+                self.save(message=f"checkpoint {chunk_idx + 1} with file {file_path}")
             # free memory before next chunk
             del X, y, locale
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+        # Capture final states for the save() call in train.py
+        self._save_model_optimizer_scheduler_data(
+            model=model,
+            optimizer=bp.optimizer,
+            scheduler=bp.scheduler
+        )
 
     def _save_model_optimizer_scheduler_data(self, model, optimizer, scheduler):
         self.origin_model = model
@@ -205,6 +256,11 @@ class FineTuneModel():
             "scheduler": self.origin_scheduler.state_dict(),
         }, path)
         print(f"model saved at {path}")
+
+        # Check if validation loss is available to add to the commit message
+        if hasattr(self, 'latest_val_loss') and self.latest_val_loss is not None:
+            if "validation loss" not in message:
+                message = f"{message} with validation loss {self.latest_val_loss:.4f}"
 
         upload_file(
             path_or_fileobj=path,
