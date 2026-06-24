@@ -30,10 +30,12 @@ class FineTuneModel():
             self.model_weights = None
             self.optimizer_weights = None
             self.scheduler_weights = None
+            self.start_chunk = 0
         else:
             self.model_weights = checkpoint["model"]
             self.optimizer_weights = checkpoint["optimizer"]
             self.scheduler_weights = checkpoint["scheduler"]
+            self.start_chunk = checkpoint.get("chunk_idx", 0)
 
         self.transform = TokenCodec()
         self.locale = Locales()
@@ -181,7 +183,7 @@ class FineTuneModel():
             bpc.scheduler.load_state_dict(scheduler_weights)
         return bpc
 
-    def train(self, file_path):
+    def train(self, file_path, start_chunk=None):
         model = self._load_pretrained_model(self.model_weights)
         scaler = torch.amp.GradScaler('cuda') if self.locale.device.type == 'cuda' else None
 
@@ -192,7 +194,12 @@ class FineTuneModel():
         bp = self._load_optimizer_scheduler(bpc=bp, optimizer_weights=self.optimizer_weights, scheduler_weights=self.scheduler_weights)
         tr = TrainConfig()
 
+        resume_chunk = start_chunk if start_chunk is not None else self.start_chunk
+        chunk_idx = resume_chunk - 1
+
         for chunk_idx, ids in self.stream_token_chunks(file_path):
+            if chunk_idx < resume_chunk:
+                continue
             locale = Locales()
             for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
                 locale.X.append(ids[i : i + locale.seq_len])
@@ -247,7 +254,8 @@ class FineTuneModel():
                 self._save_model_optimizer_scheduler_data(
                     model=model,
                     optimizer=bp.optimizer,
-                    scheduler=bp.scheduler
+                    scheduler=bp.scheduler,
+                    next_chunk_idx=chunk_idx + 1
                 )
 
                 self.save(message=f"checkpoint {chunk_idx + 1} with file {file_path}")
@@ -259,21 +267,27 @@ class FineTuneModel():
         self._save_model_optimizer_scheduler_data(
             model=model,
             optimizer=bp.optimizer,
-            scheduler=bp.scheduler
+            scheduler=bp.scheduler,
+            next_chunk_idx=chunk_idx + 1
         )
 
-    def _save_model_optimizer_scheduler_data(self, model, optimizer, scheduler):
+    def _save_model_optimizer_scheduler_data(self, model, optimizer, scheduler, next_chunk_idx):
         self.origin_model = model
         self.origin_optimizer = optimizer
         self.origin_scheduler = scheduler
+        self.next_chunk_idx = next_chunk_idx
 
     def save(self, path=None, message="training completed"):
         path = path or self.checkpoint_path
-        torch.save({
+        save_dict = {
             "model": self.origin_model.module.state_dict() if hasattr(self.origin_model, 'module') else self.origin_model.state_dict(),
             "optimizer": self.origin_optimizer.state_dict(),
             "scheduler": self.origin_scheduler.state_dict(),
-        }, path)
+        }
+        if hasattr(self, 'next_chunk_idx') and self.next_chunk_idx is not None:
+            save_dict["chunk_idx"] = self.next_chunk_idx
+
+        torch.save(save_dict, path)
         print(f"model saved at {path}")
 
         # Check if validation loss is available to add to the commit message
