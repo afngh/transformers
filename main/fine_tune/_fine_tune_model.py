@@ -66,22 +66,63 @@ class FineTuneModel():
 
         return ids
     
-    def encode_file(self, file_path, chunk_size=500_000):
-        """yields chunks of token IDs, with each chunk containing chunk_size tokens"""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            buffer_ids = []
-            char_block_size = chunk_size * 4
-            char_block = f.read(char_block_size)
-            while char_block:
-                ids = self.transform.encode(char_block)
-                buffer_ids.extend(ids)
-                while len(buffer_ids) >= chunk_size:
-                    yield buffer_ids[:chunk_size]
-                    buffer_ids = buffer_ids[chunk_size:]
-                char_block = f.read(char_block_size)
-            if len(buffer_ids) > 0:
-                buffer_ids.append(self.transform.EOS_IDX)
-                yield buffer_ids
+    def stream_token_chunks(self, pt_path, chunk_size=500_000):
+        """
+        Streams chunks of TOKENS (not characters) from a pre-tokenized .pt file.
+        chunk_size=500_000 now means 500K actual tokens per chunk.
+        """
+        data = torch.load(pt_path)           # shape: (N,) long tensor
+        total = len(data)
+        start = 0
+        chunk_idx = 0
+        while start < total:
+            end = min(start + chunk_size, total)
+            chunk = data[start:end].tolist()  # list of ints
+            yield chunk_idx, chunk
+            start = end
+            chunk_idx += 1
+
+    def compute_val_loss(self, model, val_pt_path, seq_len, batch_size=64, max_batches=100):
+        import os
+        if not os.path.exists(val_pt_path):
+            print(f"Validation file {val_pt_path} not found — skipping validation loss computation")
+            return 0.0
+
+        data = torch.load(val_pt_path)
+        device = self.locale.device
+
+        X, y = [], []
+        for i in range(0, min(len(data) - seq_len, max_batches * batch_size * seq_len), seq_len):
+            X.append(data[i : i + seq_len])
+            y.append(data[i+1 : i + seq_len + 1])
+
+        if len(X) == 0:
+            return 0.0
+
+        X = torch.stack(X).to(device)
+        y = torch.stack(y).to(device)
+
+        loss_fn = nn.CrossEntropyLoss()
+        model.eval()
+        total_loss = 0.0
+        batches = 0
+
+        with torch.no_grad():
+            for b in range(0, len(X), batch_size):
+                xb = X[b:b+batch_size]
+                yb = y[b:b+batch_size]
+                if device.type == 'cuda':
+                    with torch.amp.autocast(device_type='cuda'):
+                        logits = model(xb)
+                        loss = loss_fn(logits.reshape(-1, logits.size(-1)), yb.reshape(-1))
+                else:
+                    logits = model(xb)
+                    loss = loss_fn(logits.reshape(-1, logits.size(-1)), yb.reshape(-1))
+                total_loss += loss.item()
+                batches += 1
+
+        model.train()
+        return total_loss / max(batches, 1)
 
     def _get_model_arch(self, transform):
         config = ModelConfig(vocab_size=transform.vocab_size)
@@ -151,7 +192,7 @@ class FineTuneModel():
         bp = self._load_optimizer_scheduler(bpc=bp, optimizer_weights=self.optimizer_weights, scheduler_weights=self.scheduler_weights)
         tr = TrainConfig()
 
-        for chunk_idx, ids in enumerate(self.encode_file(file_path)):
+        for chunk_idx, ids in self.stream_token_chunks(file_path):
             locale = Locales()
             for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
                 locale.X.append(ids[i : i + locale.seq_len])
@@ -164,18 +205,7 @@ class FineTuneModel():
             X = torch.tensor(locale.X)
             y = torch.tensor(locale.y)
 
-            # Perform a 90/10 split
-            val_size = max(1, int(len(locale.X) * 0.1))
-            train_size = len(locale.X) - val_size
-
-            if train_size > 0:
-                X_train, X_val = X[:train_size], X[train_size:]
-                y_train, y_val = y[:train_size], y[train_size:]
-            else:
-                X_train, X_val = X, X
-                y_train, y_val = y, y
-
-            dl = DataLoaderConfig(X=X_train, y=y_train, shuffle=True)
+            dl = DataLoaderConfig(X=X, y=y, shuffle=True)
             
             print(f"Chunk {chunk_idx+1} — {len(ids):,} tokens")
 
@@ -207,35 +237,11 @@ class FineTuneModel():
                         nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
                         bp.optimizer.step()
                 bp.scheduler.step()
-            
-            # Calculate validation loss
-            model.eval()
-            val_loss = 0.0
-            val_batches = 0
-            val_dl = DataLoaderConfig(X=X_val, y=y_val, batch_size=dl.batch_size, shuffle=False, drop_last=False)
-            with torch.no_grad():
-                for X_val_batch, y_val_batch in val_dl.dataloader:
-                    X_val_batch = X_val_batch.to(locale.device, non_blocking=True)
-                    y_val_batch = y_val_batch.to(locale.device, non_blocking=True)
-                    if scaler is not None:
-                        with torch.amp.autocast(device_type='cuda'):
-                            y_val_pred = model(X_val_batch)
-                            loss = bp.loss_fn(
-                                y_val_pred.reshape(-1, y_val_pred.size(-1)),
-                                y_val_batch.reshape(-1)
-                            )
-                    else:
-                        y_val_pred = model(X_val_batch)
-                        loss = bp.loss_fn(
-                            y_val_pred.reshape(-1, y_val_pred.size(-1)),
-                            y_val_batch.reshape(-1)
-                        )
-                    val_loss += loss.item()
-                    val_batches += 1
-            avg_val_loss = val_loss / val_batches if val_batches > 0 else 0.0
-            self.latest_val_loss = avg_val_loss
-            print(f"({file_path})Chunk {chunk_idx+1}  Validation Loss: {self.latest_val_loss:.4f}")
-            model.train()
+
+                # Calculate and log validation loss after each epoch
+                val_loss = self.compute_val_loss(model, "bin/data/wiki103_val.pt", seq_len=locale.seq_len)
+                self.latest_val_loss = val_loss
+                print(f"Epoch {epoch+1} | Val Loss: {val_loss:.4f}")
 
             if (chunk_idx + 1) % 50 == 0:
                 self._save_model_optimizer_scheduler_data(
@@ -246,7 +252,6 @@ class FineTuneModel():
 
                 self.save(message=f"checkpoint {chunk_idx + 1} with file {file_path}")
             # free memory before next chunk
-            del X_train, X_val, y_train, y_val
             del X, y, locale
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
