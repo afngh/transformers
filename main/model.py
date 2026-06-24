@@ -29,102 +29,103 @@ from .config._model_config import Indexes
 from .config._model_config import Data
 from .config._model_config import Locales
 
-text = open('./data/wiki_00.txt').read(1000)
-print(f"Data length: {len(text)}")
+if __name__ == '__main__':
+    text = open('./data/wiki_00.txt').read(20000)
+    print(f"Data length: {len(text)}")
 
-transform = TokenCodec()
-ids = list()
+    transform = TokenCodec()
+    ids = list()
 
-ids.extend(transform.encode(text))
-ids.append(transform.EOS_IDX)
+    ids.extend(transform.encode(text))
+    ids.append(transform.EOS_IDX)
 
-locale = Locales()
-config = ModelConfig(vocab_size=transform.vocab_size)
-ModelOrchestrator = ModelOrchestrator(config=config)
+    locale = Locales()
+    config = ModelConfig(vocab_size=transform.vocab_size)
+    ModelOrchestrator = ModelOrchestrator(config=config)
 
-for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
-    locale.X.append(ids[i : i + locale.seq_len])
-    locale.y.append(ids[i+1 : i + locale.seq_len + 1])
+    for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
+        locale.X.append(ids[i : i + locale.seq_len])
+        locale.y.append(ids[i+1 : i + locale.seq_len + 1])
 
-X = torch.tensor(locale.X).to(locale.device)
-y = torch.tensor(locale.y).to(locale.device)
+    X = torch.tensor(locale.X)
+    y = torch.tensor(locale.y)
 
-model = Model(
-    EmbeddingModel=ModelOrchestrator.EmbeddingModel,
-    PositionalEmbeddingModel=ModelOrchestrator.PositionalEmbeddingModel,
-    TransformerBlockLayers=ModelOrchestrator.TransformerBlockLayers,
-    Transformer=ModelOrchestrator.TransformerModel,
-    Device=ModelOrchestrator.Device
-)
+    model = Model(
+        EmbeddingModel=ModelOrchestrator.EmbeddingModel,
+        PositionalEmbeddingModel=ModelOrchestrator.PositionalEmbeddingModel,
+        TransformerBlockLayers=ModelOrchestrator.TransformerBlockLayers,
+        Transformer=ModelOrchestrator.TransformerModel,
+        Device=ModelOrchestrator.Device
+    )
 
-if torch.cuda.device_count() > 1:
-    model = nn.DataParallel(model)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
 
-dl = DataLoaderConfig(X=X, y=y)
-bp = BackPropConfig(model=model)
-tr = TrainConfig()
+    dl = DataLoaderConfig(X=X, y=y, shuffle=True)
+    bp = BackPropConfig(model=model)
+    tr = TrainConfig()
 
-scaler = torch.amp.GradScaler('cuda') if locale.device.type == 'cuda' else None
+    scaler = torch.amp.GradScaler('cuda') if locale.device.type == 'cuda' else None
 
-for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
-  model.train()
-  for X_data,y_true in dl.dataloader:
-    bp.optimizer.zero_grad()
-    if scaler is not None:
-      with torch.amp.autocast(device_type='cuda'):
-        y_pred = model(X_data)
-        loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
-      scaler.scale(loss).backward()
-      scaler.unscale_(bp.optimizer)
-      nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
-      scaler.step(bp.optimizer)
-      scaler.update()
-    else:
-      y_pred = model(X_data)
-      loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
-      loss.backward()
-      nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
-      bp.optimizer.step()
-  bp.scheduler.step()
+    for epoch in track(range(tr.EPOCHS),description="Training Vocab:"):
+      model.train()
+      for X_data,y_true in dl.dataloader:
+        X_data = X_data.to(locale.device, non_blocking=True)
+        y_true = y_true.to(locale.device, non_blocking=True)
+        bp.optimizer.zero_grad()
+        if scaler is not None:
+          with torch.amp.autocast(device_type='cuda'):
+            y_pred = model(X_data)
+            loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
+          scaler.scale(loss).backward()
+          scaler.unscale_(bp.optimizer)
+          nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
+          scaler.step(bp.optimizer)
+          scaler.update()
+        else:
+          y_pred = model(X_data)
+          loss = bp.loss_fn(y_pred.reshape(-1, y_pred.size(-1)), y_true.reshape(-1))
+          loss.backward()
+          nn.utils.clip_grad_norm_(model.parameters(), tr.NORM)
+          bp.optimizer.step()
+      bp.scheduler.step()
 
+    inference = InferenceConfig(max_tokens=20, temperature=1.5, top_k=5, top_p=0.9)
 
+    client = Generator(
+        model=model,
+        max_tokens=inference.max_tokens,
+        temperature=inference.temperature,
+        top_k=inference.top_k,
+        top_p=inference.top_p,
+        transform=transform,
+        config=config,
+        seq_len=locale.seq_len,
+        device=locale.device,
+    )
 
-inference = InferenceConfig(max_tokens=20, temperature=1.5, top_k=5, top_p=0.9)
+    print(f"Test generated response: [ {client.generate_response('war of')} ]")
 
-client = Generator(
-    model=model,
-    max_tokens=inference.max_tokens,
-    temperature=inference.temperature,
-    top_k=inference.top_k,
-    top_p=inference.top_p,
-    transform=transform,
-    config=config,
-    seq_len=locale.seq_len,
-    device=locale.device,
-)
+    ModelSaveData = ModelSave(
+        model=model,
+        optimizer=bp.optimizer,
+        scheduler=bp.scheduler
+    )
 
-print(f"Test generated response: [ {client.generate_response('war of')} ]")
+    ConfigSaveData = ConfigSave(
+        inference=inference,
+        transform=transform,
+        config=config,
+        locale=locale,
+    )
 
-ModelSaveData = ModelSave(
-    model=model,
-    optimizer=bp.optimizer,
-    scheduler=bp.scheduler
-)
+    ConfigPathData = ConfigPath(
+        model_path="bin/model/model.pt",
+        config_path="bin/data/config.pkl",
+    )
 
-ConfigSaveData = ConfigSave(
-    inference=inference,
-    transform=transform,
-    config=config,
-    locale=locale,
-)
+    SaveModel = SaveModel(ModelSaveData=ModelSaveData, ConfigSaveData=ConfigSaveData, ConfigPathData=ConfigPathData)
+    SaveModel.save()
 
-ConfigPathData = ConfigPath(
-    model_path="bin/model/model.pt",
-    config_path="bin/data/config.pkl",
-)
-
-SaveModel = SaveModel(ModelSaveData=ModelSaveData, ConfigSaveData=ConfigSaveData, ConfigPathData=ConfigPathData)
-SaveModel.save()
-
-trainable_params = sum(p.numel() for p in model.parameters())
-print(f"Trainable parameters: {trainable_params:,}")
+    trainable_params = sum(p.numel() for p in model.parameters())
+    print(f"Trainable parameters: {trainable_params:,}")

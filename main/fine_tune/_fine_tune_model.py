@@ -147,6 +147,10 @@ class FineTuneModel():
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
 
+        bp = BackPropConfig(model=model)
+        bp = self._load_optimizer_scheduler(bpc=bp, optimizer_weights=self.optimizer_weights, scheduler_weights=self.scheduler_weights)
+        tr = TrainConfig()
+
         for chunk_idx, ids in enumerate(self.encode_file(file_path)):
             locale = Locales()
             for i in range(0, len(ids) - locale.seq_len, locale.seq_len):
@@ -157,8 +161,8 @@ class FineTuneModel():
                 print(f"Chunk {chunk_idx+1} has no data, skipping.")
                 continue
 
-            X = torch.tensor(locale.X).to(locale.device)
-            y = torch.tensor(locale.y).to(locale.device)
+            X = torch.tensor(locale.X)
+            y = torch.tensor(locale.y)
 
             # Perform a 90/10 split
             val_size = max(1, int(len(locale.X) * 0.1))
@@ -171,16 +175,15 @@ class FineTuneModel():
                 X_train, X_val = X, X
                 y_train, y_val = y, y
 
-            LoadUniConfigs = self._load_uni_configs(X=X_train, y=y_train, model=model)
-            dl = LoadUniConfigs["DataLoaderConfig"]
-            bp = LoadUniConfigs["BackPropConfig"]
-            tr = LoadUniConfigs["TrainConfig"]
+            dl = DataLoaderConfig(X=X_train, y=y_train, shuffle=True)
             
             print(f"Chunk {chunk_idx+1} — {len(ids):,} tokens")
 
             for epoch in track(range(tr.EPOCHS), description=f"Chunk {chunk_idx+1}:"):
                 model.train()
                 for X_data, y_true in dl.dataloader:
+                    X_data = X_data.to(locale.device, non_blocking=True)
+                    y_true = y_true.to(locale.device, non_blocking=True)
                     bp.optimizer.zero_grad()
                     if scaler is not None:
                         with torch.amp.autocast(device_type='cuda'):
@@ -212,6 +215,8 @@ class FineTuneModel():
             val_dl = DataLoaderConfig(X=X_val, y=y_val, batch_size=dl.batch_size, shuffle=False, drop_last=False)
             with torch.no_grad():
                 for X_val_batch, y_val_batch in val_dl.dataloader:
+                    X_val_batch = X_val_batch.to(locale.device, non_blocking=True)
+                    y_val_batch = y_val_batch.to(locale.device, non_blocking=True)
                     if scaler is not None:
                         with torch.amp.autocast(device_type='cuda'):
                             y_val_pred = model(X_val_batch)
