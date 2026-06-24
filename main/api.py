@@ -5,9 +5,9 @@ client = dynamo()
 client.Client()
 
 response = client.create(
-    input="User: hello.\n Assistant:",
-    max_tokens=100,
-    temperature=1.5
+    input="The weather today is",
+    max_tokens=50,
+    temperature=0.8
 )
 
 print(response)
