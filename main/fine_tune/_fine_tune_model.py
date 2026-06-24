@@ -243,7 +243,7 @@ class FineTuneModel():
                 self.latest_val_loss = val_loss
                 print(f"Epoch {epoch+1} | Val Loss: {val_loss:.4f}")
 
-            if (chunk_idx + 1) % 10 == 0:
+            if (chunk_idx + 1) % 5 == 0:
                 self._save_model_optimizer_scheduler_data(
                     model=model,
                     optimizer=bp.optimizer,
