@@ -27,6 +27,11 @@ class Generator:
 
                 probabilities = torch.softmax(output / self.temperature, dim=-1)
 
+                if self.top_k > 0:
+                    val, idx = torch.topk(probabilities, self.top_k, dim=-1)
+                    probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                    probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
                 if self.top_p < 1.0:
                     sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
                     cumulative_probs = torch.cumsum(sorted_probs, dim=-1)

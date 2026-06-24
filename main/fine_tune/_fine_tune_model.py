@@ -67,14 +67,21 @@ class FineTuneModel():
         return ids
     
     def encode_file(self, file_path, chunk_size=500_000):
-        """yields one chunk of text at a time instead of loading whole file"""
-        with open(file_path, 'r') as f:
-            text = f.read(chunk_size)
-            while text:
-                ids = self.transform.encode(text)
-                ids.append(self.transform.EOS_IDX)
-                yield ids
-                text = f.read(chunk_size)
+        """yields chunks of token IDs, with each chunk containing chunk_size tokens"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            buffer_ids = []
+            char_block_size = chunk_size * 4
+            char_block = f.read(char_block_size)
+            while char_block:
+                ids = self.transform.encode(char_block)
+                buffer_ids.extend(ids)
+                while len(buffer_ids) >= chunk_size:
+                    yield buffer_ids[:chunk_size]
+                    buffer_ids = buffer_ids[chunk_size:]
+                char_block = f.read(char_block_size)
+            if len(buffer_ids) > 0:
+                buffer_ids.append(self.transform.EOS_IDX)
+                yield buffer_ids
 
     def _get_model_arch(self, transform):
         config = ModelConfig(vocab_size=transform.vocab_size)
@@ -223,6 +230,7 @@ class FineTuneModel():
             avg_val_loss = val_loss / val_batches if val_batches > 0 else 0.0
             self.latest_val_loss = avg_val_loss
             print(f"({file_path})Chunk {chunk_idx+1}  Validation Loss: {self.latest_val_loss:.4f}")
+            model.train()
 
             if (chunk_idx + 1) % 50 == 0:
                 self._save_model_optimizer_scheduler_data(
@@ -233,6 +241,7 @@ class FineTuneModel():
 
                 self.save(message=f"checkpoint {chunk_idx + 1} with file {file_path}")
             # free memory before next chunk
+            del X_train, X_val, y_train, y_val
             del X, y, locale
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
 

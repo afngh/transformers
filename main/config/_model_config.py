@@ -37,17 +37,24 @@ class Locales:
 
 
 class DataLoaderConfig:
-    def __init__(self, X, y, batch_size=64, shuffle=False, drop_last=True):
+    def __init__(self, X, y, batch_size=64, shuffle=False, drop_last=True, num_workers=2, pin_memory=True):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.dataset = TensorDataset(X, y)
-        self.dataloader = DataLoader(self.dataset, batch_size=self.batch_size, drop_last=drop_last, shuffle=self.shuffle)
+        self.dataloader = DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
+            drop_last=drop_last,
+            shuffle=self.shuffle,
+            num_workers=num_workers,
+            pin_memory=pin_memory
+        )
 
 class BackPropConfig:
     def __init__(self, model):
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1, betas=(0.9, 0.95))
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=100, eta_min=1e-5)
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=600, eta_min=1e-5)
 
 class ModelConfig:
     def __init__(self, vocab_size):

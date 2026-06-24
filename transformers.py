@@ -268,6 +268,11 @@ def generate_response(model, text, max_tokens=20, temperature=0.8, top_k=0, top_
 
             probabilities = torch.softmax(output / temperature, dim=-1)  # [1, vocab_size]
 
+            if top_k > 0:
+                val, idx = torch.topk(probabilities, top_k, dim=-1)
+                probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
             if top_p < 1.0:
                 sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
                 cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
