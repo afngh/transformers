@@ -222,7 +222,7 @@ class FineTuneModel():
                     val_batches += 1
             avg_val_loss = val_loss / val_batches if val_batches > 0 else 0.0
             self.latest_val_loss = avg_val_loss
-            print(f"Chunk {chunk_idx+1} Validation Loss: {self.latest_val_loss:.4f}")
+            print(f"({file_path})Chunk {chunk_idx+1}  Validation Loss: {self.latest_val_loss:.4f}")
 
             if (chunk_idx + 1) % 50 == 0:
                 self._save_model_optimizer_scheduler_data(
