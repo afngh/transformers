@@ -4,7 +4,7 @@ from .fine_tune._fine_tune_model import FineTuneModel
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train the Dynamo transformer model on BPE chunks.")
     parser.add_argument("file_path", type=str, help="Path to pre-tokenized training corpus (.pt file)")
-    parser.add_argument("-s", "--start_chunk", type=int, default=None, help="Chunk index to start/resume training from")
+    parser.add_argument("start_chunk", type=int, nargs="?", default=None, help="Chunk index to start/resume training from")
     parser.add_argument("-v", "--val_path", type=str, default="bin/data/simple_wiki_val.pt", help="Path to pre-tokenized validation file (.pt file)")
     parser.add_argument("-c", "--checkpoint_path", type=str, default="bin/model/model.pt", help="Path to model checkpoint (.pt file)")
 
