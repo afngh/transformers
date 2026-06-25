@@ -183,7 +183,7 @@ class FineTuneModel():
             bpc.scheduler.load_state_dict(scheduler_weights)
         return bpc
 
-    def train(self, file_path, start_chunk=None):
+    def train(self, file_path, start_chunk=None, val_path="bin/data/simple_wiki_val.pt"):
         model = self._load_pretrained_model(self.model_weights)
         scaler = torch.amp.GradScaler('cuda') if self.locale.device.type == 'cuda' else None
 
@@ -246,7 +246,7 @@ class FineTuneModel():
                 bp.scheduler.step()
 
                 # Calculate and log validation loss after each epoch
-                val_loss = self.compute_val_loss(model, "bin/data/triviaqa_val.pt", seq_len=locale.seq_len)
+                val_loss = self.compute_val_loss(model, val_path, seq_len=locale.seq_len)
                 self.latest_val_loss = val_loss
                 print(f"Epoch {epoch+1} | Val Loss: {val_loss:.4f}")
 
