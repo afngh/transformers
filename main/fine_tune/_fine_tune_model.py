@@ -246,7 +246,7 @@ class FineTuneModel():
                 bp.scheduler.step()
 
                 # Calculate and log validation loss after each epoch
-                val_loss = self.compute_val_loss(model, "bin/data/squad_val.pt", seq_len=locale.seq_len)
+                val_loss = self.compute_val_loss(model, "bin/data/triviaqa_val.pt", seq_len=locale.seq_len)
                 self.latest_val_loss = val_loss
                 print(f"Epoch {epoch+1} | Val Loss: {val_loss:.4f}")
 
