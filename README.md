@@ -1,4 +1,4 @@
-# Transformers From Scratch
+# 🤖 Transformers From Scratch
 
 > Because using Hugging Face was too easy and we don't do easy things here.
 
