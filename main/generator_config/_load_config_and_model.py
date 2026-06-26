@@ -38,15 +38,18 @@ class PretrainedHandler:
         self.config_path = config_path
     
     def load(self):
-        try:
-            hf_hub_download(
-                repo_id=REPO_ID,
-                filename="model.pt",
-                local_dir="bin/model"
-            )
-            print("Checkpoint synced from Hugging Face")
-        except Exception:
-            print("No remote checkpoint — using local")
+        if not os.path.exists(self.model_path):
+            try:
+                hf_hub_download(
+                    repo_id=REPO_ID,
+                    filename="model.pt",
+                    local_dir="bin/model"
+                )
+                print("Checkpoint synced from Hugging Face")
+            except Exception:
+                print("No remote checkpoint — using local")
+        else:
+            print("Using existing local checkpoint")
 
         try:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

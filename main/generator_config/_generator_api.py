@@ -12,43 +12,91 @@ class Generator:
         self.seq_len = seq_len
         self.config = config
 
-    def generate_response(self, prompt):
+    def generate_response(self, prompt, stream=False):
         self.model.eval()
         prompt_ids = self.transform.encode(prompt)
         ids = list(prompt_ids)
         prompt_len = len(prompt_ids)
 
-        with torch.no_grad():
-            for i in range(self.max_tokens):
-                window = ids[-self.seq_len:]
-                data = torch.tensor(window).unsqueeze(0).to(self.device)
+        if stream:
+            def generator():
+                yield prompt
+                prev_text = ""
+                with torch.no_grad():
+                    for i in range(self.max_tokens):
+                        window = ids[-self.seq_len:]
+                        data = torch.tensor(window).unsqueeze(0).to(self.device)
 
-                output = self.model(data)[:, -1, :]
+                        output = self.model(data)[:, -1, :]
 
-                probabilities = torch.softmax(output / self.temperature, dim=-1)
+                        probabilities = torch.softmax(output / self.temperature, dim=-1)
 
-                if self.top_k > 0:
-                    val, idx = torch.topk(probabilities, self.top_k, dim=-1)
-                    probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
-                    probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+                        if self.top_k > 0:
+                            val, idx = torch.topk(probabilities, self.top_k, dim=-1)
+                            probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                            probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-                if self.top_p < 1.0:
-                    sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
-                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                    num_to_keep = (cumulative_probs < self.top_p).sum(dim=-1) + 1
-                    mask = torch.arange(probabilities.shape[-1], device=self.device).unsqueeze(0) < num_to_keep.unsqueeze(1)
-                    filtered_sorted_probs = sorted_probs * mask
-                    probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
-                    probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+                        if self.top_p < 1.0:
+                            sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+                            cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                            num_to_keep = (cumulative_probs < self.top_p).sum(dim=-1) + 1
+                            mask = torch.arange(probabilities.shape[-1], device=self.device).unsqueeze(0) < num_to_keep.unsqueeze(1)
+                            filtered_sorted_probs = sorted_probs * mask
+                            probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
+                            probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-                next_id = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
+                        next_id = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
 
-                if next_id == self.transform.EOS_IDX:
-                    break
+                        if next_id == self.transform.EOS_IDX:
+                            break
 
-                ids.append(next_id)
-                if "<|endoftext|>" in self.transform.decode(ids[prompt_len:]):
-                    break
+                        ids.append(next_id)
+                        
+                        current_text = self.transform.decode(ids[prompt_len:])
+                        if "<|endoftext|>" in current_text:
+                            current_text = current_text.split("<|endoftext|>")[0]
+                            delta = current_text[len(prev_text):]
+                            if delta:
+                                yield delta
+                            break
+                        
+                        delta = current_text[len(prev_text):]
+                        if delta:
+                            yield delta
+                        prev_text = current_text
+            return generator()
+        else:
+            with torch.no_grad():
+                for i in range(self.max_tokens):
+                    window = ids[-self.seq_len:]
+                    data = torch.tensor(window).unsqueeze(0).to(self.device)
 
-        generated_text = self.transform.decode(ids[prompt_len:]).split("<|endoftext|>")[0]
-        return prompt + generated_text
+                    output = self.model(data)[:, -1, :]
+
+                    probabilities = torch.softmax(output / self.temperature, dim=-1)
+
+                    if self.top_k > 0:
+                        val, idx = torch.topk(probabilities, self.top_k, dim=-1)
+                        probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                        probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
+                    if self.top_p < 1.0:
+                        sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+                        cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                        num_to_keep = (cumulative_probs < self.top_p).sum(dim=-1) + 1
+                        mask = torch.arange(probabilities.shape[-1], device=self.device).unsqueeze(0) < num_to_keep.unsqueeze(1)
+                        filtered_sorted_probs = sorted_probs * mask
+                        probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
+                        probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
+                    next_id = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
+
+                    if next_id == self.transform.EOS_IDX:
+                        break
+
+                    ids.append(next_id)
+                    if "<|endoftext|>" in self.transform.decode(ids[prompt_len:]):
+                        break
+
+            generated_text = self.transform.decode(ids[prompt_len:]).split("<|endoftext|>")[0]
+            return prompt + generated_text
