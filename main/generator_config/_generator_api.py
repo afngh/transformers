@@ -1,7 +1,7 @@
 import torch
 
 class Generator:
-    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, transform=None, config=None, seq_len=None, device=None):
+    def __init__(self, model, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, repetition_penalty=1.0, transform=None, config=None, seq_len=None, device=None):
         self.model = model.module if hasattr(model, 'module') else model
         self.transform = transform
         self.device = device
@@ -9,6 +9,7 @@ class Generator:
         self.temperature = temperature
         self.top_k = top_k
         self.top_p = top_p
+        self.repetition_penalty = repetition_penalty
         self.seq_len = seq_len
         self.config = config
 
@@ -28,6 +29,15 @@ class Generator:
                         data = torch.tensor(window).unsqueeze(0).to(self.device)
 
                         output = self.model(data)[:, -1, :]
+
+                        if self.repetition_penalty != 1.0:
+                            for token_id in set(ids):
+                                if 0 <= token_id < output.shape[-1]:
+                                    logit = output[0, token_id]
+                                    if logit > 0:
+                                        output[0, token_id] = logit / self.repetition_penalty
+                                    else:
+                                        output[0, token_id] = logit * self.repetition_penalty
 
                         probabilities = torch.softmax(output / self.temperature, dim=-1)
 
@@ -72,6 +82,15 @@ class Generator:
                     data = torch.tensor(window).unsqueeze(0).to(self.device)
 
                     output = self.model(data)[:, -1, :]
+
+                    if self.repetition_penalty != 1.0:
+                        for token_id in set(ids):
+                            if 0 <= token_id < output.shape[-1]:
+                                logit = output[0, token_id]
+                                if logit > 0:
+                                    output[0, token_id] = logit / self.repetition_penalty
+                                else:
+                                    output[0, token_id] = logit * self.repetition_penalty
 
                     probabilities = torch.softmax(output / self.temperature, dim=-1)
 

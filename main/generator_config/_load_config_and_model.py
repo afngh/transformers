@@ -91,7 +91,7 @@ class PretrainedHandler:
 
         return imax_tokens, itemperature, itop_k, itop_p, itransform, iconfig, iseq_len, idevice
 
-    def client(self, model, config, require_params=False, temperature=None, top_k=None, top_p=None, max_tokens=None):
+    def client(self, model, config, require_params=False, temperature=None, top_k=None, top_p=None, max_tokens=None, repetition_penalty=None):
         if model is None or config is None:
             print("Model or config is not loaded properly.")
             return None
@@ -107,12 +107,15 @@ class PretrainedHandler:
             itop_p = tuple([top_p]) if top_p is not None else itop_p
             imax_tokens = tuple([max_tokens]) if max_tokens is not None else imax_tokens
 
+        rep_penalty = repetition_penalty if repetition_penalty is not None else 1.0
+
         generator = Generator(
             model=model_origin,
             max_tokens=imax_tokens[0],
             temperature=itemperature[0],
             top_k=itop_k[0],
             top_p=itop_p[0],
+            repetition_penalty=rep_penalty,
             transform=itransform[0],
             config=iconfig[0],
             seq_len=iseq_len[0],

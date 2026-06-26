@@ -14,8 +14,8 @@ class dynamo:
     def Client(self):
         self.model, self.config = self.handler.load()
 
-    def create(self, input :str, temperature=None, max_tokens=None, top_k=None, top_p=None, stream=False):
-        model_api = self.handler.client(self.model, self.config, require_params=True, temperature=temperature, top_k=top_k, top_p=top_p, max_tokens=max_tokens)
+    def create(self, input :str, temperature=None, max_tokens=None, top_k=None, top_p=None, repetition_penalty=None, stream=False):
+        model_api = self.handler.client(self.model, self.config, require_params=True, temperature=temperature, top_k=top_k, top_p=top_p, max_tokens=max_tokens, repetition_penalty=repetition_penalty)
 
         if stream:
             return model_api.generate_response(input, stream=True)

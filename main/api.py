@@ -8,6 +8,7 @@ def main():
     parser.add_argument("-t", "--temperature", type=float, default=0.8, help="Sampling temperature")
     parser.add_argument("-k", "--top_k", type=int, default=None, help="Top-k sampling threshold")
     parser.add_argument("--top_p", type=float, default=None, help="Top-p nucleus sampling threshold")
+    parser.add_argument("-r", "--repetition_penalty", type=float, default=1.0, help="Repetition penalty (1.0 = no penalty)")
     parser.add_argument("-s", "--stream", action="store_true",default=True, help="Stream response token by token")
 
     args = parser.parse_args()
@@ -21,6 +22,7 @@ def main():
         temperature=args.temperature,
         top_k=args.top_k,
         top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
         stream=args.stream
     )
 
