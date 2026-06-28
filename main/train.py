@@ -1,14 +1,15 @@
-import sys
+import argparse
 from .fine_tune._fine_tune_model import FineTuneModel
 
-PATH = 'bin/model/model.pt'
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Train the Dynamo transformer model on BPE chunks.")
+    parser.add_argument("file_path", type=str, help="Path to pre-tokenized training corpus (.pt file)")
+    parser.add_argument("start_chunk", type=int, nargs="?", default=None, help="Chunk index to start/resume training from")
+    parser.add_argument("-v", "--val_path", type=str, default="bin/data/simple_wiki_val.pt", help="Path to pre-tokenized validation file (.pt file)")
+    parser.add_argument("-c", "--checkpoint_path", type=str, default="bin/model/model.pt", help="Path to model checkpoint (.pt file)")
 
-if len(sys.argv) < 2:
-    print("Usage: python -m main.train <file_path>")
-    sys.exit(1)
+    args = parser.parse_args()
 
-file_path = sys.argv[1]
-
-model_loader = FineTuneModel(checkpoint_path=PATH)
-model_loader.train(file_path=file_path)
-model_loader.save()
+    model_loader = FineTuneModel(checkpoint_path=args.checkpoint_path)
+    model_loader.train(file_path=args.file_path, start_chunk=args.start_chunk, val_path=args.val_path)
+    model_loader.save()

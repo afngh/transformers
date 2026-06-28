@@ -1,4 +1,4 @@
-# Transformers From Scratch
+# 🤖 Transformers From Scratch
 
 > Because using Hugging Face was too easy and we don't do easy things here.
 
@@ -12,7 +12,7 @@ A **decoder-only Transformer language model built entirely from scratch** in PyT
 |---|---|
 | Tokenizer | GPT-2 BPE via `tiktoken` — fixed vocab of 50,257, never rebuilt |
 | Embedding | `nn.Embedding(vocab_size, dim)` with weight tying to output projection |
-| Positional Encoding | Sinusoidal, sized to `max_seq_len=128` |
+| Positional Encoding | Sinusoidal, sized to `max_seq_len=256` |
 | Attention | Causal multi-head self-attention with scaled dot-product + upper-triangular mask |
 | Normalization | `RMSNorm` (pre-norm — applied before each sublayer, not after) |
 | FFN | SwiGLU — `w_down(silu(w_gate(x)) * w_value(x))`, no bias |
@@ -20,9 +20,9 @@ A **decoder-only Transformer language model built entirely from scratch** in PyT
 | Output | `nn.Linear(dim, vocab_size)` — weight-tied to embedding table |
 | Optimizer | AdamW — `lr=1e-3`, `weight_decay=0.1`, `betas=(0.9, 0.95)` |
 | Grad clipping | `clip_grad_norm_` at `1.0` |
-| Scheduler | `StepLR(step_size=5, gamma=0.9)` |
+| Scheduler | `CosineAnnealingLR(T_max=100, eta_min=1e-5)` |
 
-**Config:** `dim=256`, `head=4`, `ntbl=6`, `dropout=0.2`, `seq_len=128`, `vocab_size=50257` — ~17M parameters
+**Config:** `dim=256`, `head=4`, `ntbl=6`, `dropout=0.1`, `seq_len=256`, `vocab_size=50257` — ~17M parameters
 
 ---
 

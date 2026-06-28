@@ -228,7 +228,7 @@ dataloader = DataLoader(dataset,batch_size = 32,drop_last=True,shuffle=True)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1e-5)
 
 EPOCHS = 30
 NORM = 1.0
@@ -251,43 +251,87 @@ for epoch in track(range(200),description="Training Vocab:"):
   print(f"Epoch: {epoch} && Loss: {el}")
   scheduler.step()
 
-def generate_response(model, text, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75):
-    model.eval()
-    final_data_words = [text]
-    current_words = text.split()
+def generate_response(model, text, max_tokens=20, temperature=0.8, top_k=0, top_p=0.75, stream=False):
+    if stream:
+        def generator():
+            yield text
+            model.eval()
+            current_words = text.split()
+            with torch.no_grad():
+                for i in range(max_tokens):
+                    window = current_words[-seq_len:]
+                    data = encode(window)
+                    data = [min(max(idx, 0), vocab_size - 1) for idx in data]
+                    data = torch.tensor(data).unsqueeze(0).to(device)  # [1, seq_len]
 
-    with torch.no_grad():
-        for i in range(max_tokens):
-            window = current_words[-seq_len:]
-            data = encode(window)
-            data = [min(max(idx, 0), vocab_size - 1) for idx in data]
-            data = torch.tensor(data).unsqueeze(0).to(device)  # [1, seq_len]
+                    output = model(data)                               # [1, vocab_size]
+                    probabilities = torch.softmax(output / temperature, dim=-1)  # [1, vocab_size]
 
-            output = model(data)                               # [1, vocab_size]
-            # Do NOT squeeze here — keep 2D for top_p logic
+                    if top_k > 0:
+                        val, idx = torch.topk(probabilities, top_k, dim=-1)
+                        probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                        probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-            probabilities = torch.softmax(output / temperature, dim=-1)  # [1, vocab_size]
+                    if top_p < 1.0:
+                        sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+                        cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                        num_to_keep = (cumulative_probs < top_p).sum(dim=-1) + 1  # [1]
+                        mask = torch.arange(probabilities.shape[-1], device=device).unsqueeze(0) < num_to_keep.unsqueeze(1)
+                        filtered_sorted_probs = sorted_probs * mask
+                        probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
+                        probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
 
-            if top_p < 1.0:
-                sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
-                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                num_to_keep = (cumulative_probs < top_p).sum(dim=-1) + 1  # [1]
-                mask = torch.arange(probabilities.shape[-1], device=device).unsqueeze(0) < num_to_keep.unsqueeze(1)
-                filtered_sorted_probs = sorted_probs * mask
-                probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
-                probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+                    word_idx = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
+                    predicted_word = itw[word_idx]
 
-            # squeeze only here, right before multinomial
-            word_idx = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
-            predicted_word = itw[word_idx]
+                    if predicted_word == '<EOS>':
+                        break
 
-            if predicted_word == '<EOS>':
-                break
+                    yield " " + predicted_word
+                    current_words.append(predicted_word)
+        return generator()
+    else:
+        model.eval()
+        final_data_words = [text]
+        current_words = text.split()
 
-            final_data_words.append(predicted_word)
-            current_words.append(predicted_word)
+        with torch.no_grad():
+            for i in range(max_tokens):
+                window = current_words[-seq_len:]
+                data = encode(window)
+                data = [min(max(idx, 0), vocab_size - 1) for idx in data]
+                data = torch.tensor(data).unsqueeze(0).to(device)  # [1, seq_len]
 
-    return ' '.join(final_data_words)
+                output = model(data)                               # [1, vocab_size]
+                # Do NOT squeeze here — keep 2D for top_p logic
+
+                probabilities = torch.softmax(output / temperature, dim=-1)  # [1, vocab_size]
+
+                if top_k > 0:
+                    val, idx = torch.topk(probabilities, top_k, dim=-1)
+                    probabilities = torch.zeros_like(probabilities).scatter_(-1, idx, val)
+                    probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
+                if top_p < 1.0:
+                    sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                    num_to_keep = (cumulative_probs < top_p).sum(dim=-1) + 1  # [1]
+                    mask = torch.arange(probabilities.shape[-1], device=device).unsqueeze(0) < num_to_keep.unsqueeze(1)
+                    filtered_sorted_probs = sorted_probs * mask
+                    probabilities = torch.zeros_like(probabilities).scatter_(-1, sorted_indices, filtered_sorted_probs)
+                    probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True)
+
+                # squeeze only here, right before multinomial
+                word_idx = torch.multinomial(probabilities.squeeze(0), num_samples=1).item()
+                predicted_word = itw[word_idx]
+
+                if predicted_word == '<EOS>':
+                    break
+
+                final_data_words.append(predicted_word)
+                current_words.append(predicted_word)
+
+        return ' '.join(final_data_words)
 generate_response(
       model=model,
       text="from",

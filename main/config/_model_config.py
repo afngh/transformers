@@ -30,24 +30,31 @@ class Data:
 class Locales:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.seq_len = 128
+        self.seq_len = 256
         self.X = list()
         self.y = list()
 
 
 
 class DataLoaderConfig:
-    def __init__(self, X, y, batch_size=64, shuffle=False):
+    def __init__(self, X, y, batch_size=64, shuffle=False, drop_last=True, num_workers=2, pin_memory=True):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.dataset = TensorDataset(X, y)
-        self.dataloader = DataLoader(self.dataset, batch_size=self.batch_size, drop_last=True, shuffle=self.shuffle)
+        self.dataloader = DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
+            drop_last=drop_last,
+            shuffle=self.shuffle,
+            num_workers=num_workers,
+            pin_memory=pin_memory
+        )
 
 class BackPropConfig:
     def __init__(self, model):
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1, betas=(0.9, 0.95))
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.9)
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=600, eta_min=1e-5)
 
 class ModelConfig:
     def __init__(self, vocab_size):
@@ -55,7 +62,7 @@ class ModelConfig:
         self.vocab_size = int(vocab_size)
         self.dim = int(256)
         self.head = int(4)
-        self.dropout = float(0.2)
+        self.dropout = float(0.1)
         self.ntbl = int(6)
 
 class TrainConfig:
@@ -72,7 +79,7 @@ class ModelOrchestrator:
 
         self.PositionalEmbeddingModel = PositionalEmbedding(
             # vocab_size=config.vocab_size,
-            max_seq_len=128,
+            max_seq_len=256,
             dims=config.dim,
         )
 

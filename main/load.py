@@ -14,12 +14,14 @@ class dynamo:
     def Client(self):
         self.model, self.config = self.handler.load()
 
-    def create(self, input :str, temperature=None, max_tokens=None):
-        model_api = self.handler.client(self.model, self.config, require_params=True, temperature=temperature, max_tokens=max_tokens)
+    def create(self, input :str, temperature=None, max_tokens=None, top_k=None, top_p=None, repetition_penalty=None, stream=False):
+        model_api = self.handler.client(self.model, self.config, require_params=True, temperature=temperature, top_k=top_k, top_p=top_p, max_tokens=max_tokens, repetition_penalty=repetition_penalty)
 
-        output = model_api.generate_response(input)
-
-        return Response(input_text=input, output_text=output)
+        if stream:
+            return model_api.generate_response(input, stream=True)
+        else:
+            output = model_api.generate_response(input, stream=False)
+            return Response(input_text=input, output_text=output)
 
 class Response:
     def __init__(self, input_text=None, output_text=None):

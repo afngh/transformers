@@ -1,13 +1,37 @@
+import argparse
 from .load import dynamo
 
-client = dynamo()
+def main():
+    parser = argparse.ArgumentParser(description="Dynamo Text Generation API")
+    parser.add_argument("-p", "--prompt", type=str, required=True, help="Input prompt for generation")
+    parser.add_argument("-l", "--length", type=int, default=50, help="Maximum tokens to generate")
+    parser.add_argument("-t", "--temperature", type=float, default=0.8, help="Sampling temperature")
+    parser.add_argument("-k", "--top_k", type=int, default=None, help="Top-k sampling threshold")
+    parser.add_argument("--top_p", type=float, default=None, help="Top-p nucleus sampling threshold")
+    parser.add_argument("-r", "--repetition_penalty", type=float, default=1.0, help="Repetition penalty (1.0 = no penalty)")
+    parser.add_argument("-s", "--stream", action="store_true",default=True, help="Stream response token by token")
 
-client.Client()
+    args = parser.parse_args()
 
-response = client.create(
-    input="User: hello.\n Assistant:",
-    max_tokens=100,
-    temperature=1.5
-)
+    client = dynamo()
+    client.Client()
 
-print(response)
+    response = client.create(
+        input=args.prompt,
+        max_tokens=args.length,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
+        stream=args.stream
+    )
+
+    if args.stream:
+        for chunk in response:
+            print(chunk, end="", flush=True)
+        print()
+    else:
+        print(response)
+
+if __name__ == '__main__':
+    main()
